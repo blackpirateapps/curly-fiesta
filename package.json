@@ -1,7 +1,6 @@
 {
-  "name": "tiny-social",
-  "version": "1.0.0",
   "dependencies": {
-    "@libsql/client": "latest"
+    "@libsql/client": "latest",
+    "busboy": "latest"
   }
 }
