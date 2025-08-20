@@ -2,155 +2,194 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Mini Forum</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 text-gray-900">
-
   <div class="max-w-2xl mx-auto p-4">
     <h1 class="text-2xl font-bold mb-4 text-center">Mini Forum</h1>
 
-    <!-- New Post Form -->
-    <form id="postForm" class="bg-white p-4 rounded-xl shadow mb-6">
-      <textarea id="postText" placeholder="What's on your mind?" class="w-full p-2 border rounded mb-2"></textarea>
+    <!-- New Post -->
+    <form id="postForm" class="bg-white p-4 rounded-xl shadow mb-6" enctype="multipart/form-data">
+      <textarea id="postText" placeholder="What's on your mind?" class="w-full p-2 border rounded mb-2" required></textarea>
       <input type="file" id="postImage" accept="image/*" class="mb-2" />
-      <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Post</button>
+      <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Post</button>
     </form>
 
-    <!-- Posts Container -->
+    <!-- Posts -->
     <div id="posts"></div>
   </div>
 
   <script>
-    // Load posts
-    async function loadPosts() {
-      const res = await fetch("/api/posts");
-      const posts = await res.json();
-      const container = document.getElementById("posts");
-      container.innerHTML = "";
+    // ---------- utils ----------
+    const esc = (s="") => s
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
 
-      posts.forEach(post => {
-        const div = document.createElement("div");
-        div.className = "bg-white p-4 rounded-xl shadow mb-4";
-
-        div.innerHTML = `
-          <p class="mb-2">${post.text}</p>
-          ${post.image_url ? `<img src="${post.image_url}" class="w-full max-h-60 object-cover rounded mb-2">` : ""}
-          <div class="flex gap-4 text-sm text-gray-600 mb-2">
-            <button onclick="handleLike('post', ${post.id}, 'like')">❤️ ${post.likes || 0}</button>
-            <button onclick="toggleComments(${post.id})">💬 ${post.comments_count || 0}</button>
-          </div>
-          <div id="comments-${post.id}" class="ml-2 hidden"></div>
-          <div id="comment-form-${post.id}" class="mt-2 hidden">
-            <textarea id="comment-text-${post.id}" placeholder="Write a comment..." class="w-full p-2 border rounded mb-2"></textarea>
-            <input type="file" id="comment-image-${post.id}" accept="image/*" class="mb-2"/>
-            <button onclick="submitComment(${post.id})" class="bg-green-500 text-white px-3 py-1 rounded">Comment</button>
-          </div>
-        `;
-
-        container.appendChild(div);
-      });
+    // ---------- API ----------
+    async function getPosts() {
+      const r = await fetch("/api/getPosts");
+      return r.json();
     }
-
-    // Handle likes
-    async function handleLike(type, id, action) {
+    async function createPost(fd) {
+      await fetch("/api/createPost", { method: "POST", body: fd });
+    }
+    async function getComments(postId) {
+      const r = await fetch(`/api/comment?post_id=${encodeURIComponent(postId)}`);
+      return r.json(); // expects nested [{..., replies:[...]}, ...]
+    }
+    async function createComment(fd) {
+      await fetch("/api/comment", { method: "POST", body: fd });
+    }
+    async function sendLike(type, id, action="like") {
       await fetch("/api/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type, id, action })
       });
-      loadPosts();
     }
 
-    // Toggle comments visibility
-    async function toggleComments(postId) {
-      const el = document.getElementById(`comments-${postId}`);
-      const form = document.getElementById(`comment-form-${postId}`);
-      if (el.classList.contains("hidden")) {
-        el.classList.remove("hidden");
-        form.classList.remove("hidden");
-        renderComments(postId, null, el);
-      } else {
-        el.classList.add("hidden");
-        form.classList.add("hidden");
-      }
-    }
+    // ---------- render ----------
+    async function loadPosts() {
+      const posts = await getPosts();
+      const root = document.getElementById("posts");
+      root.innerHTML = "";
 
-    // Render comments recursively
-    async function renderComments(postId, parentId, container) {
-      const res = await fetch(`/api/comment?post_id=${postId}&parent_id=${parentId || ""}`);
-      const comments = await res.json();
-      container.innerHTML = "";
-
-      for (const c of comments) {
-        const div = document.createElement("div");
-        div.className = "p-2 mb-2 bg-gray-100 rounded-lg";
-
-        div.innerHTML = `
-          <p>${c.text}</p>
-          ${c.image_url ? `<img src="${c.image_url}" class="w-32 rounded mt-2">` : ""}
-          <div class="flex gap-2 mt-1 text-sm text-gray-600">
-            <button onclick="handleLike('comment', ${c.id}, 'like')">❤️ ${c.likes || 0}</button>
-            <button onclick="showReplyForm(${postId}, ${c.id})">Reply</button>
+      posts.forEach(post => {
+        const card = document.createElement("div");
+        card.className = "bg-white p-4 rounded-xl shadow mb-4";
+        card.innerHTML = `
+          <p class="mb-2 whitespace-pre-wrap">${esc(post.content || "")}</p>
+          ${post.image_url ? `<img src="${post.image_url}" class="w-full max-h-60 object-cover rounded mb-2">` : ""}
+          <div class="flex gap-4 text-sm text-gray-600 mb-2">
+            <button class="like-post">❤️ <span>${post.likes ?? 0}</span></button>
+            <button class="toggle-comments">💬 Comments</button>
           </div>
-          <div id="replies-${c.id}" class="ml-4"></div>
-          <div id="reply-form-${c.id}" class="hidden mt-2">
-            <textarea id="reply-text-${c.id}" placeholder="Write a reply..." class="w-full p-2 border rounded mb-2"></textarea>
-            <input type="file" id="reply-image-${c.id}" accept="image/*" class="mb-2"/>
-            <button onclick="submitComment(${postId}, ${c.id})" class="bg-blue-500 text-white px-3 py-1 rounded">Reply</button>
+          <div class="comments hidden">
+            <!-- new comment -->
+            <div class="mt-2">
+              <textarea class="c-text w-full p-2 border rounded mb-2" placeholder="Write a comment..."></textarea>
+              <input type="file" class="c-file mb-2" accept="image/*" />
+              <button class="c-submit bg-green-600 text-white px-3 py-1 rounded">Comment</button>
+            </div>
+            <!-- thread -->
+            <div class="thread mt-3 space-y-2"></div>
           </div>
         `;
+        root.appendChild(card);
 
-        container.appendChild(div);
+        // like post
+        card.querySelector(".like-post").addEventListener("click", async () => {
+          await sendLike("post", post.id, "like");
+          loadPosts();
+        });
 
-        // Load replies recursively
-        const replyContainer = div.querySelector(`#replies-${c.id}`);
-        await renderComments(postId, c.id, replyContainer);
-      }
+        // toggle + load comments
+        const commentsWrap = card.querySelector(".comments");
+        const thread = card.querySelector(".thread");
+        card.querySelector(".toggle-comments").addEventListener("click", async () => {
+          commentsWrap.classList.toggle("hidden");
+          if (!commentsWrap.classList.contains("hidden")) {
+            await renderThread(post.id, thread);
+          }
+        });
+
+        // submit new top-level comment
+        card.querySelector(".c-submit").addEventListener("click", async () => {
+          const textEl = card.querySelector(".c-text");
+          const fileEl = card.querySelector(".c-file");
+          const fd = new FormData();
+          fd.append("post_id", post.id);
+          fd.append("text", textEl.value);
+          if (fileEl.files.length) fd.append("image", fileEl.files[0]);
+          await createComment(fd);
+          textEl.value = ""; fileEl.value = "";
+          await renderThread(post.id, thread);
+        });
+      });
     }
 
-    // Show reply form
-    function showReplyForm(postId, commentId) {
-      document.getElementById(`reply-form-${commentId}`).classList.toggle("hidden");
+    async function renderThread(postId, container) {
+      const data = await getComments(postId); // nested
+      container.innerHTML = "";
+      data.forEach(node => container.appendChild(renderNode(postId, node)));
     }
 
-    // Submit comment or reply
-    async function submitComment(postId, parentId = null) {
-      const textEl = parentId ? document.getElementById(`reply-text-${parentId}`) : document.getElementById(`comment-text-${postId}`);
-      const fileEl = parentId ? document.getElementById(`reply-image-${parentId}`) : document.getElementById(`comment-image-${postId}`);
-      
-      const formData = new FormData();
-      formData.append("post_id", postId);
-      formData.append("text", textEl.value);
-      if (parentId) formData.append("parent_id", parentId);
-      if (fileEl.files.length > 0) formData.append("image", fileEl.files[0]);
+    function renderNode(postId, node, depth=0) {
+      const wrap = document.createElement("div");
+      wrap.className = `${depth ? "pl-3 border-l border-gray-200" : ""}`;
 
-      await fetch("/api/comment", {
-        method: "POST",
-        body: formData
+      const item = document.createElement("div");
+      item.className = "bg-gray-100 rounded p-2";
+      item.innerHTML = `
+        <div class="whitespace-pre-wrap text-sm">${esc(node.text || "")}</div>
+        ${node.image_url ? `<img src="${node.image_url}" class="w-40 rounded mt-2">` : ""}
+        <div class="flex gap-3 mt-1 text-xs text-gray-600">
+          <button class="like-comment">❤️ <span>${node.likes ?? 0}</span></button>
+          <button class="reply-toggle">↩️ Reply</button>
+        </div>
+        <div class="reply-form hidden mt-2">
+          <textarea class="r-text w-full p-2 border rounded mb-2" placeholder="Write a reply..."></textarea>
+          <input type="file" class="r-file mb-2" accept="image/*" />
+          <button class="r-send bg-blue-600 text-white px-3 py-1 rounded">Reply</button>
+        </div>
+        <div class="children mt-2 space-y-2"></div>
+      `;
+      wrap.appendChild(item);
+
+      // like comment
+      item.querySelector(".like-comment").addEventListener("click", async () => {
+        await sendLike("comment", node.id, "like");
+        // simple refresh: reload thread at parent level
+        const root = wrap.closest(".thread");
+        await renderThread(postId, root);
       });
 
-      textEl.value = "";
-      fileEl.value = "";
-      renderComments(postId, null, document.getElementById(`comments-${postId}`));
+      // toggle reply
+      item.querySelector(".reply-toggle").addEventListener("click", () => {
+        item.querySelector(".reply-form").classList.toggle("hidden");
+      });
+
+      // send reply
+      item.querySelector(".r-send").addEventListener("click", async () => {
+        const txt = item.querySelector(".r-text");
+        const file = item.querySelector(".r-file");
+        const fd = new FormData();
+        fd.append("post_id", postId);
+        fd.append("parent_id", node.id);
+        fd.append("text", txt.value);
+        if (file.files.length) fd.append("image", file.files[0]);
+        await createComment(fd);
+        txt.value=""; file.value="";
+        const root = wrap.closest(".thread");
+        await renderThread(postId, root);
+      });
+
+      // children
+      const kids = item.querySelector(".children");
+      (node.replies || []).forEach(child => {
+        kids.appendChild(renderNode(postId, child, depth+1));
+      });
+
+      return wrap;
     }
 
-    // New post submission
-    document.getElementById("postForm").addEventListener("submit", async e => {
+    // new post submit
+    document.getElementById("postForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const text = document.getElementById("postText").value;
-      const image = document.getElementById("postImage").files[0];
+      const text = document.getElementById("postText").value.trim();
+      const img = document.getElementById("postImage").files[0];
+      if (!text) return;
 
-      const formData = new FormData();
-      formData.append("text", text);
-      if (image) formData.append("image", image);
+      const fd = new FormData();
+      fd.append("content", text);          // <-- backend expects 'content' for posts
+      if (img) fd.append("image", img);
 
-      await fetch("/api/createPost", {
-        method: "POST",
-        body: formData
-      });
-
+      await createPost(fd);
       document.getElementById("postText").value = "";
       document.getElementById("postImage").value = "";
       loadPosts();
