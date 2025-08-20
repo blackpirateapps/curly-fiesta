@@ -169,9 +169,12 @@
 
   <main class="max-w-xl mx-auto p-3">
     <!-- Site Description -->
-    <div class="text-center text-gray-600 text-sm mb-4 px-4">
-      <p class="font-semibold">What happens in the common room, gets posted here.</p>
-      <p>Your secret's safe with everyone.</p>
+    <div class="text-center text-gray-600 text-sm mb-4 px-4 space-y-2">
+      <div>
+        <p class="font-semibold">What happens in the common room, gets posted here.</p>
+        <p>Your secret's safe with everyone.</p>
+      </div>
+      <p class="pt-2 border-t border-gray-200">Welcome to Curly Fiesta, the anonymous social hub for your campus. Share confessions, spill the latest rumors, and find out what's <em>really</em> going on. What you see here, stays here... maybe.</p>
     </div>
   
     <!-- New Post Form -->
@@ -281,11 +284,12 @@
           card.className = "post-card p-4";
 
           let pollHTML = '';
-          if (post.poll_options) {
+          // FIX: Check if post.poll_options is not null and is an array
+          if (post.poll_options && Array.isArray(post.poll_options)) {
               const userVoteOptionId = votedPolls[post.id];
-              const totalVotes = post.poll_options.reduce((sum, opt) => sum + opt.votes, 0);
+              const totalVotes = post.poll_options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
               const pollOptionsHTML = post.poll_options.map(opt => {
-                  const percentage = totalVotes > 0 ? ((opt.votes / totalVotes) * 100).toFixed(1) : 0;
+                  const percentage = totalVotes > 0 ? (((opt.votes || 0) / totalVotes) * 100).toFixed(1) : 0;
                   const isVoted = userVoteOptionId === opt.id;
                   return `
                     <div class="poll-option ${isVoted ? 'voted' : ''}" data-option-id="${opt.id}" data-post-id="${post.id}">
@@ -395,29 +399,18 @@
             addVotedPoll(postId, optionId);
             pollContainer.classList.add('voted');
             
-            // Recalculate and display results
+            const allPosts = await getPosts();
+            const currentPost = allPosts.find(p => p.id == postId);
+            
             const options = Array.from(pollContainer.querySelectorAll('.poll-option'));
-            let totalVotes = 0;
-            const votesMap = {};
-
-            // First pass: update votes and calculate total
+            let totalVotes = currentPost.poll_options.reduce((sum, opt) => sum + opt.votes, 0) + 1;
+            
             for (const opt of options) {
                 const currentOptionId = parseInt(opt.dataset.optionId, 10);
-                const textEl = opt.querySelector('.poll-option-text span:first-child');
-                const postData = posts.find(p => p.id == postId);
-                const optionData = postData.poll_options.find(po => po.id == currentOptionId);
-                let currentVotes = optionData.votes;
-                if (currentOptionId === optionId) {
-                    currentVotes++;
-                }
-                votesMap[currentOptionId] = currentVotes;
-                totalVotes += currentVotes;
-            }
+                let currentVotes = currentPost.poll_options.find(po => po.id == currentOptionId).votes;
+                if(currentOptionId === optionId) currentVotes++;
 
-            // Second pass: update UI
-            for (const opt of options) {
-                const currentOptionId = parseInt(opt.dataset.optionId, 10);
-                const percentage = totalVotes > 0 ? ((votesMap[currentOptionId] / totalVotes) * 100).toFixed(1) : 0;
+                const percentage = totalVotes > 0 ? ((currentVotes / totalVotes) * 100).toFixed(1) : 0;
                 opt.querySelector('.poll-option-result').style.width = `${percentage}%`;
                 const textContainer = opt.querySelector('.poll-option-text');
                 textContainer.innerHTML = `<span>${textContainer.firstElementChild.textContent}</span><span>${percentage}%</span>`;
