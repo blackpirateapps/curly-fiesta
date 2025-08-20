@@ -11,8 +11,8 @@
 
   <main>
     <section>
-    <form id="postForm" enctype="multipart/form-data">
-  <textarea name="content" id="content" placeholder="What's on your mind?" required></textarea>
+   <form id="postForm" enctype="multipart/form-data">
+  <textarea name="content" placeholder="What's on your mind?" required></textarea>
   <input type="file" name="image" accept="image/*">
   <button type="submit">Post</button>
 </form>
@@ -58,13 +58,18 @@
     }
 
     document.getElementById("postForm").onsubmit = async e => {
-      e.preventDefault();
-      const content = document.getElementById("content").value;
-      await fetch("/api/createPost", { method: "POST", body: JSON.stringify({ content }) });
-      document.getElementById("content").value = "";
-      loadPosts();
-    };
+  e.preventDefault();
 
+  const formData = new FormData(e.target);
+
+  await fetch("/api/createPost", {
+    method: "POST",
+    body: formData
+  });
+
+  e.target.reset();
+  loadPosts();
+};
     loadPosts();
   </script>
 </body>
