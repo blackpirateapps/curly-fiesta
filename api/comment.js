@@ -1,29 +1,32 @@
-import { createClient } from "@libsql/client";
 import Busboy from "busboy";
 import { put } from "@vercel/blob";
-
-const db = createClient({
-  url: process.env.TURSO_DB_URL,
-  authToken: process.env.TURSO_DB_TOKEN,
-});
+import { db } from "../lib/db.js";
 
 // helper: parse multipart
 function parseMultipart(req) {
   return new Promise((resolve, reject) => {
     const busboy = Busboy({ headers: req.headers });
     const fields = {};
-    let fileBuffer = null, fileName = null, mimeType = null;
+    let fileBuffer = null,
+      fileName = null,
+      mimeType = null;
 
     busboy.on("file", (field, file, info) => {
       fileName = info.filename;
       mimeType = info.mimeType;
       const chunks = [];
-      file.on("data", chunk => chunks.push(chunk));
-      file.on("end", () => { fileBuffer = Buffer.concat(chunks); });
+      file.on("data", (chunk) => chunks.push(chunk));
+      file.on("end", () => {
+        fileBuffer = Buffer.concat(chunks);
+      });
     });
 
-    busboy.on("field", (name, val) => { fields[name] = val; });
-    busboy.on("finish", () => resolve({ fields, fileBuffer, fileName, mimeType }));
+    busboy.on("field", (name, val) => {
+      fields[name] = val;
+    });
+    busboy.on("finish", () =>
+      resolve({ fields, fileBuffer, fileName, mimeType })
+    );
     busboy.on("error", reject);
 
     req.pipe(busboy);
@@ -33,16 +36,21 @@ function parseMultipart(req) {
 export default async function handler(req, res) {
   if (req.method === "POST") {
     try {
-      const { fields, fileBuffer, fileName, mimeType } = await parseMultipart(req);
+      const { fields, fileBuffer, fileName, mimeType } = await parseMultipart(
+        req
+      );
 
-      const { postId, parentId, content } = fields;
-      if (!postId || !content) {
+      const { post_id, parent_id, text } = fields;
+      if (!post_id || !text) {
         return res.status(400).json({ error: "Missing fields" });
       }
 
       let imageUrl = null;
       if (fileBuffer) {
-        const blob = await put(`comment-${Date.now()}-${fileName}`, fileBuffer, { contentType: mimeType });
+        const blob = await put(`comment-${Date.now()}-${fileName}`, fileBuffer, {
+          contentType: mimeType,
+          access: "public",
+        });
         imageUrl = blob.url;
       }
 
@@ -51,7 +59,7 @@ export default async function handler(req, res) {
           INSERT INTO comments (post_id, parent_id, content, image_url, likes, created_at)
           VALUES (?, ?, ?, ?, 0, datetime('now'))
         `,
-        args: [postId, parentId || null, content, imageUrl],
+        args: [post_id, parent_id || null, text, imageUrl],
       });
 
       return res.status(200).json({ success: true });
@@ -63,15 +71,32 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     try {
-      const { postId } = req.query;
-      if (!postId) return res.status(400).json({ error: "Missing postId" });
+      const { post_id } = req.query;
+      if (!post_id) return res.status(400).json({ error: "Missing postId" });
 
       const result = await db.execute({
         sql: "SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC",
-        args: [postId],
+        args: [post_id],
       });
 
-      return res.status(200).json(result.rows);
+      const rows = result.rows;
+      const commentsById = {};
+      const threadedComments = [];
+
+      for (const row of rows) {
+        const comment = { ...row, replies: [] };
+        commentsById[comment.id] = comment;
+      }
+
+      for (const comment of Object.values(commentsById)) {
+        if (comment.parent_id) {
+          commentsById[comment.parent_id].replies.push(comment);
+        } else {
+          threadedComments.push(comment);
+        }
+      }
+
+      return res.status(200).json(threadedComments);
     } catch (err) {
       console.error("Fetch comments error:", err);
       return res.status(500).json({ error: "Failed to fetch comments" });
