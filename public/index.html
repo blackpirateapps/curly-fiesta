@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tiny Social</title>
+  <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header><h1>Tiny Social</h1></header>
+
+  <main>
+    <section>
+      <form id="postForm">
+        <textarea id="content" placeholder="What's on your mind?" required></textarea>
+        <button type="submit">Post</button>
+      </form>
+    </section>
+
+    <section id="posts"></section>
+  </main>
+
+  <footer><small>Made with Vercel + Turso</small></footer>
+
+  <script>
+    async function loadPosts() {
+      const res = await fetch("/api/getPosts");
+      const posts = await res.json();
+      const container = document.getElementById("posts");
+      container.innerHTML = "";
+      posts.forEach(post => {
+        const div = document.createElement("article");
+        div.innerHTML = `
+          <p>${post.content}</p>
+          <button onclick="likePost(${post.id})">❤️ ${post.likes}</button>
+          <form onsubmit="return commentPost(event, ${post.id})">
+            <input type="text" placeholder="Comment..." required>
+            <button>Reply</button>
+          </form>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function likePost(id) {
+      await fetch("/api/like", { method: "POST", body: JSON.stringify({ id }) });
+      loadPosts();
+    }
+
+    async function commentPost(e, id) {
+      e.preventDefault();
+      const input = e.target.querySelector("input");
+      await fetch("/api/comment", { method: "POST", body: JSON.stringify({ postId: id, text: input.value }) });
+      input.value = "";
+      return false;
+    }
+
+    document.getElementById("postForm").onsubmit = async e => {
+      e.preventDefault();
+      const content = document.getElementById("content").value;
+      await fetch("/api/createPost", { method: "POST", body: JSON.stringify({ content }) });
+      document.getElementById("content").value = "";
+      loadPosts();
+    };
+
+    loadPosts();
+  </script>
+</body>
+</html>
