@@ -1,29 +1,4 @@
-import { createClient } from "@libsql/client";
-
-const db = createClient({
-  url: process.env.TURSO_DB_URL,
-  authToken: process.env.TURSO_DB_TOKEN,
-});
-
-// Helper function to parse JSON body from request
-function parseJSON(req) {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk.toString();
-    });
-    req.on("end", () => {
-      try {
-        resolve(JSON.parse(body));
-      } catch (err) {
-        reject(err);
-      }
-    });
-    req.on("error", (err) => {
-      reject(err);
-    });
-  });
-}
+import { db } from "../lib/db.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -31,10 +6,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { id, type } = await parseJSON(req);
+    // In Vercel's Node.js runtime, the body is automatically parsed.
+    const { id, type } = req.body;
 
     if (!id || !type) {
-      return res.status(400).json({ error: "Missing fields" });
+      return res.status(400).json({ error: "Missing required fields 'id' and 'type'" });
     }
 
     const table = type === "comment" ? "comments" : "posts";
