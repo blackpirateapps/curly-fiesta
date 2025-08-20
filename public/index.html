@@ -113,14 +113,20 @@
       font-weight: 500;
       padding: 4px;
       border-radius: 6px;
-      transition: background-color 0.2s;
+      transition: background-color 0.2s, color 0.2s, fill 0.2s, transform 0.1s;
     }
     .action-button:hover {
       background-color: #f0f2f5;
     }
+    .action-button:active {
+      transform: scale(0.95);
+    }
     .action-button.liked svg {
       fill: #ff3b30;
       color: #ff3b30;
+    }
+    .action-button:disabled {
+      opacity: 0.5;
     }
   </style>
 </head>
@@ -131,6 +137,11 @@
   </header>
 
   <main class="max-w-xl mx-auto p-3">
+    <!-- Site Description -->
+    <div class="text-center text-gray-600 text-sm mb-4 px-4">
+      <p>Welcome to Curly Fiesta, the anonymous social hub for your campus. Share confessions, spill the latest rumors, and find out what's <em>really</em> going on. What you see here, stays here... maybe.</p>
+    </div>
+  
     <!-- New Post Form -->
     <div class="post-card p-4">
       <form id="postForm" enctype="multipart/form-data">
@@ -161,6 +172,34 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+
+    // --- Cookie Management for Likes ---
+    function getLikedItems() {
+      const cookie = document.cookie.split('; ').find(row => row.startsWith('likedItems='));
+      if (!cookie) return { posts: [], comments: [] };
+      try {
+        return JSON.parse(decodeURIComponent(cookie.split('=')[1]));
+      } catch (e) {
+        return { posts: [], comments: [] };
+      }
+    }
+
+    function setLikedItems(likedItems) {
+      const date = new Date();
+      date.setFullYear(date.getFullYear() + 1); // Expire in 1 year
+      const cookieValue = encodeURIComponent(JSON.stringify(likedItems));
+      document.cookie = `likedItems=${cookieValue};expires=${date.toUTCString()};path=/;SameSite=Lax`;
+    }
+
+    function addLikedItem(type, id) {
+      const likedItems = getLikedItems();
+      const items = (type === 'post') ? likedItems.posts : likedItems.comments;
+      if (!items.includes(id)) {
+          items.push(id);
+      }
+      setLikedItems(likedItems);
+    }
+
 
     // ---------- API CALLS ----------
     async function getPosts() {
@@ -199,20 +238,26 @@
 
       try {
         const posts = await getPosts();
+        const likedItems = getLikedItems();
         posts.forEach(post => {
+          const isLiked = likedItems.posts.includes(post.id);
           const card = document.createElement("div");
           card.className = "post-card p-4";
           card.innerHTML = `
             <p class="mb-3 whitespace-pre-wrap">${esc(post.content || "")}</p>
-            ${post.image_url ? `<img src="${post.image_url}" class="w-full rounded-lg mb-3 border border-gray-200">` : ""}
-            <div class="flex gap-4 text-sm text-gray-600 mb-2 border-t pt-2">
-              <button class="action-button like-post" data-post-id="${post.id}">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+            ${post.image_url ? `<img src="${post.image_url}" class="w-full rounded-lg mb-3 border border-gray-200" crossorigin="anonymous">` : ""}
+            <div class="flex gap-2 text-sm text-gray-600 mb-2 border-t pt-2">
+              <button class="action-button like-post ${isLiked ? 'liked' : ''}" data-post-id="${post.id}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
                 <span>${post.likes ?? 0}</span>
               </button>
               <button class="action-button toggle-comments">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 <span>Comments</span>
+              </button>
+              <button class="action-button share-post ml-auto">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>
+                 <span>Share</span>
               </button>
             </div>
             <div class="comments hidden mt-3">
@@ -227,8 +272,6 @@
             </div>
           `;
           postsContainer.appendChild(card);
-
-          // Event Listeners for the new card
           addPostEventListeners(card, post);
         });
       } catch (error) {
@@ -243,24 +286,59 @@
       // Like post
       card.querySelector(".like-post").addEventListener("click", async (e) => {
         const button = e.currentTarget;
+        // The button having the 'liked' class is the source of truth.
+        // If it has it, the user has already liked it in this session.
+        if (button.classList.contains('liked')) {
+            return; 
+        }
+
         const span = button.querySelector("span");
-        const svg = button.querySelector("svg");
         const currentLikes = parseInt(span.textContent, 10);
         
-        button.disabled = true;
-        svg.classList.add("liked");
+        // Optimistically update UI and save to cookie
+        button.classList.add("liked");
         span.textContent = currentLikes + 1;
+        addLikedItem('post', post.id);
 
+        // Then, send the update to the server
         try {
           await sendLike("post", post.id);
         } catch (error) {
           console.error("Like failed:", error);
-          svg.classList.remove("liked"); // Revert on error
-          span.textContent = currentLikes;
-        } finally {
-          button.disabled = false;
+          // We don't revert the UI here to prevent a user from re-liking.
+          // The server-side count will be off by one, but the user's state remains consistent.
+          // This is a common strategy for better UX.
         }
       });
+      
+      // Share post
+      const shareButton = card.querySelector(".share-post");
+      if (!navigator.share) {
+        shareButton.style.display = 'none';
+      } else {
+        shareButton.addEventListener("click", async () => {
+          const shareData = {
+            title: 'Curly Fiesta Post',
+            text: post.content,
+            url: window.location.href,
+          };
+          
+          try {
+            if (post.image_url) {
+                const response = await fetch(post.image_url);
+                const blob = await response.blob();
+                const file = new File([blob], 'post.jpg', { type: blob.type });
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    shareData.files = [file];
+                }
+            }
+            await navigator.share(shareData);
+          } catch (err) {
+            console.error("Share failed:", err);
+          }
+        });
+      }
+
 
       // Toggle + load comments
       const commentsWrap = card.querySelector(".comments");
@@ -315,6 +393,8 @@
     }
 
     function renderCommentNode(postId, comment, depth = 0) {
+      const likedItems = getLikedItems();
+      const isLiked = likedItems.comments.includes(comment.id);
       const wrap = document.createElement("div");
       wrap.className = `${depth > 0 ? "pl-4 border-l-2 border-gray-200" : ""}`;
 
@@ -323,12 +403,12 @@
       item.innerHTML = `
         <p class="whitespace-pre-wrap text-sm">${esc(comment.content || "")}</p>
         <div class="flex gap-3 mt-1 text-xs text-gray-500">
-          <button class="action-button like-comment">
-             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+          <button class="action-button like-comment ${isLiked ? 'liked' : ''}">
+             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
             <span>${comment.likes ?? 0}</span>
           </button>
           <button class="action-button reply-toggle">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17v-4.01c0-1.65 1.34-2.99 3-2.99h3"/><path d="m13 15 3-3-3-3"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17v-4.01c0-1.65 1.34-2.99 3-2.99h3"/><path d="m13 15 3-3-3-3"/></svg>
             <span>Reply</span>
           </button>
         </div>
@@ -345,22 +425,21 @@
       // Like comment
       item.querySelector(".like-comment").addEventListener("click", async (e) => {
         const button = e.currentTarget;
+        if (button.classList.contains('liked')) {
+            return;
+        }
+
         const span = button.querySelector("span");
-        const svg = button.querySelector("svg");
         const currentLikes = parseInt(span.textContent, 10);
         
-        button.disabled = true;
-        svg.classList.add("liked");
+        button.classList.add("liked");
         span.textContent = currentLikes + 1;
+        addLikedItem('comment', comment.id);
 
         try {
           await sendLike("comment", comment.id);
         } catch (error) {
           console.error("Like failed:", error);
-          svg.classList.remove("liked");
-          span.textContent = currentLikes;
-        } finally {
-          button.disabled = false;
         }
       });
 
@@ -387,7 +466,6 @@
           await createComment(fd);
           textEl.value = "";
           item.querySelector(".reply-form").classList.add("hidden");
-          // Refresh the whole thread to see the new reply
           await renderThread(postId, wrap.closest(".thread"));
         } catch (error) {
           console.error("Reply failed:", error);
@@ -407,7 +485,6 @@
     }
 
     // ---------- INITIALIZATION ----------
-    // New post form submission
     document.getElementById("postForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const textEl = document.getElementById("postText");
@@ -437,7 +514,6 @@
       }
     });
 
-    // Initial load
     loadPosts();
   </script>
 </body>
