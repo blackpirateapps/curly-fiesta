@@ -1,6 +1,14 @@
 {
+  "name": "vercel-social-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "vercel dev"
+  },
   "dependencies": {
     "@libsql/client": "latest",
+    "@vercel/blob": "latest",
     "busboy": "latest"
   }
 }

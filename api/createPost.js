@@ -1,9 +1,10 @@
 import Busboy from "busboy";
 import { db } from "../lib/db.js";
+import { put } from "@vercel/blob";   // 👈 new SDK
 
 export const config = {
   api: {
-    bodyParser: false, // disable default body parsing
+    bodyParser: false,
   },
 };
 
@@ -18,27 +19,16 @@ export default async function handler(req, res) {
     const content = fields.content || "";
     let imageUrl = null;
 
-    // If file uploaded, push to Vercel Blob
     if (file) {
-      const blobRes = await fetch("https://api.vercel.com/v2/blob", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`,
-          "Content-Type": "application/octet-stream",
-        },
-        body: file.buffer,
+      // 👇 Use Vercel Blob SDK to store
+      const blob = await put(file.filename, file.buffer, {
+        access: "public", // public URL
       });
-
-      const blob = await blobRes.json();
       console.log("Blob response:", blob);
 
-      // Make sure it's a string
-      if (blob && typeof blob.url === "string") {
-        imageUrl = blob.url;
-      }
+      imageUrl = blob.url; // permanent URL
     }
 
-    // Insert into DB
     await db.execute({
       sql: "INSERT INTO posts (content, likes, created_at, image_url) VALUES (?, 0, datetime('now'), ?)",
       args: [content, imageUrl ?? null],
@@ -51,7 +41,6 @@ export default async function handler(req, res) {
   }
 }
 
-// --- Helper to parse multipart form ---
 function parseForm(req) {
   return new Promise((resolve, reject) => {
     const busboy = Busboy({ headers: req.headers });
