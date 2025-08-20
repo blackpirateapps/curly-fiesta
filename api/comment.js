@@ -1,82 +1,111 @@
 import { createClient } from "@libsql/client";
-import Busboy from "busboy";
 import { put } from "@vercel/blob";
+import Busboy from "busboy";
 
 const db = createClient({
-  url: process.env.TURSO_DB_URL,
-  authToken: process.env.TURSO_DB_TOKEN,
+  url: process.env.TURSO_DATABASE_URL,
+  authToken: process.env.TURSO_AUTH_TOKEN,
 });
-
-// helper: parse multipart
-function parseMultipart(req) {
-  return new Promise((resolve, reject) => {
-    const busboy = Busboy({ headers: req.headers });
-    const fields = {};
-    let fileBuffer = null, fileName = null, mimeType = null;
-
-    busboy.on("file", (field, file, info) => {
-      fileName = info.filename;
-      mimeType = info.mimeType;
-      const chunks = [];
-      file.on("data", chunk => chunks.push(chunk));
-      file.on("end", () => { fileBuffer = Buffer.concat(chunks); });
-    });
-
-    busboy.on("field", (name, val) => { fields[name] = val; });
-    busboy.on("finish", () => resolve({ fields, fileBuffer, fileName, mimeType }));
-    busboy.on("error", reject);
-
-    req.pipe(busboy);
-  });
-}
 
 export default async function handler(req, res) {
   if (req.method === "POST") {
-    try {
-      const { fields, fileBuffer, fileName, mimeType } = await parseMultipart(req);
+    return handlePost(req, res);
+  } else if (req.method === "GET") {
+    return handleGet(req, res);
+  } else {
+    res.status(405).json({ error: "Method not allowed" });
+  }
+}
 
-      const { postId, parentId, content } = fields;
-      if (!postId || !content) {
-        return res.status(400).json({ error: "Missing fields" });
-      }
+/**
+ * Handle creating a new comment or reply
+ */
+async function handlePost(req, res) {
+  try {
+    const busboy = Busboy({ headers: req.headers });
+    let post_id, parent_id, text, imageUrl = null;
 
-      let imageUrl = null;
-      if (fileBuffer) {
-        const blob = await put(`comment-${Date.now()}-${fileName}`, fileBuffer, { contentType: mimeType });
+    const buffers = [];
+
+    busboy.on("file", async (fieldname, file, filename, encoding, mimetype) => {
+      const chunks = [];
+      file.on("data", (chunk) => chunks.push(chunk));
+      file.on("end", async () => {
+        const buffer = Buffer.concat(chunks);
+        const blob = await put(`comments/${Date.now()}-${filename}`, buffer, {
+          access: "public",
+        });
         imageUrl = blob.url;
+      });
+    });
+
+    busboy.on("field", (fieldname, val) => {
+      if (fieldname === "post_id") post_id = val;
+      if (fieldname === "parent_id") parent_id = val || null;
+      if (fieldname === "text") text = val;
+    });
+
+    busboy.on("finish", async () => {
+      if (!post_id || !text) {
+        return res.status(400).json({ error: "post_id and text are required" });
       }
 
-      await db.execute({
-        sql: `
-          INSERT INTO comments (post_id, parent_id, content, image_url, likes, created_at)
-          VALUES (?, ?, ?, ?, 0, datetime('now'))
-        `,
-        args: [postId, parentId || null, content, imageUrl],
-      });
-
-      return res.status(200).json({ success: true });
-    } catch (err) {
-      console.error("Comment error:", err);
-      return res.status(500).json({ error: "Failed to add comment" });
-    }
-  }
-
-  if (req.method === "GET") {
-    try {
-      const { postId } = req.query;
-      if (!postId) return res.status(400).json({ error: "Missing postId" });
-
+      const now = new Date().toISOString();
       const result = await db.execute({
-        sql: "SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC",
-        args: [postId],
+        sql: `
+          INSERT INTO comments (post_id, parent_id, text, created_at, image_url, likes)
+          VALUES (?, ?, ?, ?, ?, 0)
+        `,
+        args: [post_id, parent_id, text, now, imageUrl],
       });
 
-      return res.status(200).json(result.rows);
-    } catch (err) {
-      console.error("Fetch comments error:", err);
-      return res.status(500).json({ error: "Failed to fetch comments" });
-    }
-  }
+      res.status(200).json({ success: true, id: result.lastInsertRowid, imageUrl });
+    });
 
-  return res.status(405).json({ error: "Method not allowed" });
+    req.pipe(busboy);
+  } catch (err) {
+    console.error("Comment POST error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
+
+/**
+ * Handle fetching all comments + replies for a post
+ */
+async function handleGet(req, res) {
+  try {
+    const { post_id } = req.query;
+    if (!post_id) {
+      return res.status(400).json({ error: "post_id required" });
+    }
+
+    const result = await db.execute({
+      sql: "SELECT * FROM comments WHERE post_id = ? ORDER BY created_at ASC",
+      args: [post_id],
+    });
+
+    const rows = result.rows.map((row) => row);
+
+    // Build threaded structure
+    const map = {};
+    const roots = [];
+
+    rows.forEach((c) => {
+      c.replies = [];
+      map[c.id] = c;
+    });
+
+    rows.forEach((c) => {
+      if (c.parent_id) {
+        if (map[c.parent_id]) map[c.parent_id].replies.push(c);
+      } else {
+        roots.push(c);
+      }
+    });
+
+    res.status(200).json(roots);
+  } catch (err) {
+    console.error("Comment GET error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 }

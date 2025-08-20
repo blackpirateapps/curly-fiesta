@@ -2,252 +2,160 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tiny Threads</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini Forum</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 text-gray-900 min-h-screen flex flex-col">
-  <!-- Header -->
-  <header class="bg-white border-b">
-    <div class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
-      <h1 class="text-2xl font-bold">Tiny Threads</h1>
-      <span class="text-xs text-gray-500">Vercel + Turso (No login)</span>
-    </div>
-  </header>
+<body class="bg-gray-100 text-gray-900">
 
-  <!-- Main -->
-  <main class="flex-1">
-    <div class="max-w-3xl mx-auto px-4 py-6 space-y-6">
-      <!-- Create Post -->
-      <section class="bg-white rounded-xl shadow-sm border p-4">
-        <form id="postForm" enctype="multipart/form-data" class="space-y-3">
-          <textarea name="content" id="postContent" rows="3" required
-            class="w-full p-3 border rounded-lg outline-none focus:ring focus:ring-blue-200"
-            placeholder="What's on your mind?"></textarea>
+  <div class="max-w-2xl mx-auto p-4">
+    <h1 class="text-2xl font-bold mb-4 text-center">Mini Forum</h1>
 
-          <div class="flex items-center gap-3">
-            <input type="file" name="image" accept="image/*"
-              class="block w-full text-sm text-gray-600 border rounded-lg file:mr-4 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200" />
-            <button type="submit"
-              class="shrink-0 inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-white font-medium hover:bg-blue-700">
-              Post
-            </button>
-          </div>
-        </form>
-      </section>
+    <!-- New Post Form -->
+    <form id="postForm" class="bg-white p-4 rounded-xl shadow mb-6">
+      <textarea id="postText" placeholder="What's on your mind?" class="w-full p-2 border rounded mb-2"></textarea>
+      <input type="file" id="postImage" accept="image/*" class="mb-2" />
+      <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Post</button>
+    </form>
 
-      <!-- Feed -->
-      <section class="space-y-4" id="posts"></section>
-    </div>
-  </main>
-
-  <!-- Footer -->
-  <footer class="bg-white border-t">
-    <div class="max-w-3xl mx-auto px-4 py-4 text-center text-xs text-gray-500">
-      © 2025 Tiny Threads
-    </div>
-  </footer>
+    <!-- Posts Container -->
+    <div id="posts"></div>
+  </div>
 
   <script>
-    // ---------- Utilities ----------
-    const $ = (q, root=document) => root.querySelector(q);
-    const $$ = (q, root=document) => [...root.querySelectorAll(q)];
-    const escapeHTML = (str) => (str ?? "").toString()
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-
-    // ---------- API wrappers ----------
-    async function apiLike(targetId, type) {
-      await fetch('/api/like', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetId, type })
-      });
-    }
-    async function apiCreatePost(formData) {
-      await fetch('/api/createPost', { method: 'POST', body: formData });
-    }
-    async function apiCreateComment(formData) {
-      await fetch('/api/comment', { method: 'POST', body: formData });
-    }
-    async function apiGetPosts() {
-      const r = await fetch('/api/getPosts');
-      return r.json();
-    }
-    async function apiGetComments(postId) {
-      const r = await fetch(`/api/comment?postId=${encodeURIComponent(postId)}`);
-      return r.json();
-    }
-
-    // ---------- Rendering ----------
+    // Load posts
     async function loadPosts() {
-      const posts = await apiGetPosts();
-      const container = $('#posts');
-      container.innerHTML = '';
+      const res = await fetch("/api/posts");
+      const posts = await res.json();
+      const container = document.getElementById("posts");
+      container.innerHTML = "";
 
       posts.forEach(post => {
-        const card = document.createElement('article');
-        card.className = 'bg-white rounded-xl shadow-sm border p-4';
-        card.innerHTML = renderPostHTML(post);
-        container.appendChild(card);
+        const div = document.createElement("div");
+        div.className = "bg-white p-4 rounded-xl shadow mb-4";
 
-        // Wire up like
-        $('.btn-like-post', card)?.addEventListener('click', async () => {
-          await apiLike(post.id, 'post');
-          await refreshPost(card, post.id);
-        });
-
-        // Wire up toggle comment form
-        $('.btn-toggle-comment', card)?.addEventListener('click', () => {
-          $('#commentForm-' + post.id, card)?.classList.toggle('hidden');
-        });
-
-        // Wire up submit comment
-        $('#commentForm-' + post.id, card)?.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const fd = new FormData(e.target);
-          fd.append('postId', post.id);
-          await apiCreateComment(fd);
-          e.target.reset();
-          await renderCommentsInto($('#comments-' + post.id, card), post.id);
-        });
-
-        // Load comments thread
-        renderCommentsInto($('#comments-' + post.id, card), post.id);
-      });
-    }
-
-    function renderPostHTML(post) {
-      return `
-        <div class="space-y-3">
-          <div class="whitespace-pre-wrap">${escapeHTML(post.content)}</div>
-          ${post.image_url ? `<img src="${post.image_url}" alt="post image" class="w-full rounded-lg">` : ''}
-          <div class="flex items-center gap-4 text-sm text-gray-600">
-            <button class="btn-like-post hover:text-blue-600 inline-flex items-center gap-1">❤️ <span>${post.likes ?? 0}</span></button>
-            <button class="btn-toggle-comment hover:text-blue-600 inline-flex items-center gap-1">💬 Comment</button>
+        div.innerHTML = `
+          <p class="mb-2">${post.text}</p>
+          ${post.image_url ? `<img src="${post.image_url}" class="w-full max-h-60 object-cover rounded mb-2">` : ""}
+          <div class="flex gap-4 text-sm text-gray-600 mb-2">
+            <button onclick="handleLike('post', ${post.id}, 'like')">❤️ ${post.likes || 0}</button>
+            <button onclick="toggleComments(${post.id})">💬 ${post.comments_count || 0}</button>
           </div>
-
-          <!-- New comment form -->
-          <form id="commentForm-${post.id}" class="hidden mt-2 space-y-2" enctype="multipart/form-data">
-            <textarea name="content" rows="2" required
-              class="w-full p-2 border rounded-lg outline-none focus:ring focus:ring-blue-200"
-              placeholder="Write a comment..."></textarea>
-            <div class="flex items-center gap-2">
-              <input type="file" name="image" accept="image/*"
-                class="block w-full text-sm text-gray-600 border rounded-lg file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200" />
-              <button class="shrink-0 bg-gray-900 text-white px-3 py-1.5 rounded-lg hover:bg-black">Reply</button>
-            </div>
-          </form>
-
-          <!-- Comments container -->
-          <div id="comments-${post.id}" class="mt-3 space-y-3"></div>
-        </div>
-      `;
-    }
-
-    async function renderCommentsInto(rootEl, postId) {
-      const flat = await apiGetComments(postId);
-      const tree = buildTree(flat);
-      rootEl.innerHTML = '';
-      tree.forEach(node => rootEl.appendChild(renderCommentNode(node, postId, 0)));
-    }
-
-    // Build tree from flat comments using parent_id
-    function buildTree(comments) {
-      const byId = new Map();
-      comments.forEach(c => byId.set(c.id, { ...c, children: [] }));
-      const roots = [];
-      byId.forEach(node => {
-        if (node.parent_id) {
-          const parent = byId.get(node.parent_id);
-          if (parent) parent.children.push(node);
-          else roots.push(node); // orphan safety
-        } else {
-          roots.push(node);
-        }
-      });
-      return roots;
-    }
-
-    function renderCommentNode(node, postId, depth) {
-      const wrap = document.createElement('div');
-      wrap.className = `${depth ? 'pl-4 border-l-2 border-gray-200' : ''}`;
-
-      const block = document.createElement('div');
-      block.className = 'bg-gray-50 rounded-lg p-3';
-      block.innerHTML = `
-        <div class="whitespace-pre-wrap text-sm">${escapeHTML(node.content)}</div>
-        ${node.image_url ? `<img src="${node.image_url}" alt="comment image" class="w-full rounded-lg mt-2">` : ''}
-        <div class="mt-2 flex items-center gap-3 text-xs text-gray-600">
-          <button class="btn-like-comment hover:text-blue-600 inline-flex items-center gap-1" data-id="${node.id}">❤️ <span>${node.likes ?? 0}</span></button>
-          <button class="btn-toggle-reply hover:text-blue-600 inline-flex items-center gap-1" data-id="${node.id}">↩️ Reply</button>
-        </div>
-        <form id="replyForm-${node.id}" class="hidden mt-2 space-y-2" enctype="multipart/form-data">
-          <textarea name="content" rows="2" required
-            class="w-full p-2 border rounded-lg outline-none focus:ring focus:ring-blue-200"
-            placeholder="Write a reply..."></textarea>
-          <div class="flex items-center gap-2">
-            <input type="file" name="image" accept="image/*"
-              class="block w-full text-sm text-gray-600 border rounded-lg file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200" />
-            <button class="shrink-0 bg-gray-800 text-white px-3 py-1.5 rounded-lg hover:bg-gray-900">Reply</button>
+          <div id="comments-${post.id}" class="ml-2 hidden"></div>
+          <div id="comment-form-${post.id}" class="mt-2 hidden">
+            <textarea id="comment-text-${post.id}" placeholder="Write a comment..." class="w-full p-2 border rounded mb-2"></textarea>
+            <input type="file" id="comment-image-${post.id}" accept="image/*" class="mb-2"/>
+            <button onclick="submitComment(${post.id})" class="bg-green-500 text-white px-3 py-1 rounded">Comment</button>
           </div>
-        </form>
-      `;
-      wrap.appendChild(block);
+        `;
 
-      // children container
-      const kids = document.createElement('div');
-      kids.className = 'mt-2 space-y-2';
-      wrap.appendChild(kids);
-
-      // Wire up like for comment
-      $('.btn-like-comment', block)?.addEventListener('click', async () => {
-        await apiLike(node.id, 'comment');
-        await renderCommentsInto(wrap.parentElement, postId); // re-render this post's comments
+        container.appendChild(div);
       });
-
-      // Toggle reply form
-      $('.btn-toggle-reply', block)?.addEventListener('click', () => {
-        $('#replyForm-' + node.id, block)?.classList.toggle('hidden');
-      });
-
-      // Submit reply
-      $('#replyForm-' + node.id, block)?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const fd = new FormData(e.target);
-        fd.append('postId', postId);
-        fd.append('parentId', node.id);
-        await apiCreateComment(fd);
-        e.target.reset();
-        await renderCommentsInto(wrap.parentElement, postId);
-      });
-
-      // Render children
-      (node.children || []).forEach(child => {
-        kids.appendChild(renderCommentNode(child, postId, depth + 1));
-      });
-
-      return wrap;
     }
 
-    async function refreshPost(cardEl, postId) {
-      // Re-fetch only this post + comments (simple approach: refresh all)
-      await loadPosts();
+    // Handle likes
+    async function handleLike(type, id, action) {
+      await fetch("/api/like", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type, id, action })
+      });
+      loadPosts();
     }
 
-    // ---------- Submit Post ----------
-    $('#postForm').addEventListener('submit', async (e) => {
+    // Toggle comments visibility
+    async function toggleComments(postId) {
+      const el = document.getElementById(`comments-${postId}`);
+      const form = document.getElementById(`comment-form-${postId}`);
+      if (el.classList.contains("hidden")) {
+        el.classList.remove("hidden");
+        form.classList.remove("hidden");
+        renderComments(postId, null, el);
+      } else {
+        el.classList.add("hidden");
+        form.classList.add("hidden");
+      }
+    }
+
+    // Render comments recursively
+    async function renderComments(postId, parentId, container) {
+      const res = await fetch(`/api/comment?post_id=${postId}&parent_id=${parentId || ""}`);
+      const comments = await res.json();
+      container.innerHTML = "";
+
+      for (const c of comments) {
+        const div = document.createElement("div");
+        div.className = "p-2 mb-2 bg-gray-100 rounded-lg";
+
+        div.innerHTML = `
+          <p>${c.text}</p>
+          ${c.image_url ? `<img src="${c.image_url}" class="w-32 rounded mt-2">` : ""}
+          <div class="flex gap-2 mt-1 text-sm text-gray-600">
+            <button onclick="handleLike('comment', ${c.id}, 'like')">❤️ ${c.likes || 0}</button>
+            <button onclick="showReplyForm(${postId}, ${c.id})">Reply</button>
+          </div>
+          <div id="replies-${c.id}" class="ml-4"></div>
+          <div id="reply-form-${c.id}" class="hidden mt-2">
+            <textarea id="reply-text-${c.id}" placeholder="Write a reply..." class="w-full p-2 border rounded mb-2"></textarea>
+            <input type="file" id="reply-image-${c.id}" accept="image/*" class="mb-2"/>
+            <button onclick="submitComment(${postId}, ${c.id})" class="bg-blue-500 text-white px-3 py-1 rounded">Reply</button>
+          </div>
+        `;
+
+        container.appendChild(div);
+
+        // Load replies recursively
+        const replyContainer = div.querySelector(`#replies-${c.id}`);
+        await renderComments(postId, c.id, replyContainer);
+      }
+    }
+
+    // Show reply form
+    function showReplyForm(postId, commentId) {
+      document.getElementById(`reply-form-${commentId}`).classList.toggle("hidden");
+    }
+
+    // Submit comment or reply
+    async function submitComment(postId, parentId = null) {
+      const textEl = parentId ? document.getElementById(`reply-text-${parentId}`) : document.getElementById(`comment-text-${postId}`);
+      const fileEl = parentId ? document.getElementById(`reply-image-${parentId}`) : document.getElementById(`comment-image-${postId}`);
+      
+      const formData = new FormData();
+      formData.append("post_id", postId);
+      formData.append("text", textEl.value);
+      if (parentId) formData.append("parent_id", parentId);
+      if (fileEl.files.length > 0) formData.append("image", fileEl.files[0]);
+
+      await fetch("/api/comment", {
+        method: "POST",
+        body: formData
+      });
+
+      textEl.value = "";
+      fileEl.value = "";
+      renderComments(postId, null, document.getElementById(`comments-${postId}`));
+    }
+
+    // New post submission
+    document.getElementById("postForm").addEventListener("submit", async e => {
       e.preventDefault();
-      const fd = new FormData(e.target);
-      await apiCreatePost(fd);
-      e.target.reset();
-      await loadPosts();
+      const text = document.getElementById("postText").value;
+      const image = document.getElementById("postImage").files[0];
+
+      const formData = new FormData();
+      formData.append("text", text);
+      if (image) formData.append("image", image);
+
+      await fetch("/api/createPost", {
+        method: "POST",
+        body: formData
+      });
+
+      document.getElementById("postText").value = "";
+      document.getElementById("postImage").value = "";
+      loadPosts();
     });
 
-    // ---------- Initial load ----------
     loadPosts();
   </script>
 </body>
