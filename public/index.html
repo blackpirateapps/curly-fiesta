@@ -11,10 +11,11 @@
 
   <main>
     <section>
-      <form id="postForm">
-        <textarea id="content" placeholder="What's on your mind?" required></textarea>
-        <button type="submit">Post</button>
-      </form>
+    <form id="postForm" enctype="multipart/form-data">
+  <textarea name="content" id="content" placeholder="What's on your mind?" required></textarea>
+  <input type="file" name="image" accept="image/*">
+  <button type="submit">Post</button>
+</form>
     </section>
 
     <section id="posts"></section>
@@ -24,23 +25,24 @@
 
   <script>
     async function loadPosts() {
-      const res = await fetch("/api/getPosts");
-      const posts = await res.json();
-      const container = document.getElementById("posts");
-      container.innerHTML = "";
-      posts.forEach(post => {
-        const div = document.createElement("article");
-        div.innerHTML = `
-          <p>${post.content}</p>
-          <button onclick="likePost(${post.id})">❤️ ${post.likes}</button>
-          <form onsubmit="return commentPost(event, ${post.id})">
-            <input type="text" placeholder="Comment..." required>
-            <button>Reply</button>
-          </form>
-        `;
-        container.appendChild(div);
-      });
-    }
+  const res = await fetch("/api/getPosts");
+  const posts = await res.json();
+  const container = document.getElementById("posts");
+  container.innerHTML = "";
+  posts.forEach(post => {
+    const div = document.createElement("article");
+    div.innerHTML = `
+      <p>${post.content}</p>
+      ${post.image_url ? `<img src="${post.image_url}" style="max-width:100%; border-radius:8px; margin-top:0.5rem;">` : ""}
+      <button onclick="likePost(${post.id})">❤️ ${post.likes}</button>
+      <form onsubmit="return commentPost(event, ${post.id})">
+        <input type="text" placeholder="Comment..." required>
+        <button>Reply</button>
+      </form>
+    `;
+    container.appendChild(div);
+  });
+}
 
     async function likePost(id) {
       await fetch("/api/like", { method: "POST", body: JSON.stringify({ id }) });
