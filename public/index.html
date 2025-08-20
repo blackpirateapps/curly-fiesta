@@ -9,19 +9,18 @@
     /* --- iOS System Font & Base Styles --- */
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-      background-color: #f0f2f5; /* A very light gray, common in iOS apps */
+      background-color: #f0f2f5;
     }
 
     /* --- App Header --- */
     .app-header {
-      background-color: #ffffff;
+      background-color: rgba(255, 255, 255, 0.8);
       border-bottom: 1px solid #d1d1d6;
       position: sticky;
       top: 0;
       z-index: 10;
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
-      background-color: rgba(255, 255, 255, 0.8);
     }
 
     /* --- iOS-style Cards --- */
@@ -128,6 +127,38 @@
     .action-button:disabled {
       opacity: 0.5;
     }
+    
+    /* --- Poll Styles --- */
+    .poll-option {
+        background-color: #f0f2f5;
+        border: 1px solid #e5e5e5;
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+    }
+    .poll-option-result {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        background-color: #dbeafe;
+        z-index: 1;
+        transition: width 0.5s ease-in-out;
+    }
+    .poll-option-text {
+        position: relative;
+        z-index: 2;
+    }
+    .poll-option.voted {
+        font-weight: bold;
+        border-color: #007aff;
+    }
+    .poll-container.voted .poll-option {
+        cursor: not-allowed;
+    }
   </style>
 </head>
 <body class="bg-gray-100 text-gray-900">
@@ -139,15 +170,29 @@
   <main class="max-w-xl mx-auto p-3">
     <!-- Site Description -->
     <div class="text-center text-gray-600 text-sm mb-4 px-4">
-      <p>Welcome to Curly Fiesta, the anonymous social hub for your campus. Share confessions, spill the latest rumors, and find out what's <em>really</em> going on. What you see here, stays here... maybe.</p>
+      <p class="font-semibold">What happens in the common room, gets posted here.</p>
+      <p>Your secret's safe with everyone.</p>
     </div>
   
     <!-- New Post Form -->
     <div class="post-card p-4">
       <form id="postForm" enctype="multipart/form-data">
-        <textarea id="postText" placeholder="What's happening?" class="ios-input w-full p-2 mb-3" required></textarea>
+        <textarea id="postText" placeholder="What's happening? Ask a question for a poll..." class="ios-input w-full p-2 mb-3" required></textarea>
+        
+        <!-- Poll Creation UI -->
+        <div id="poll-creator" class="hidden space-y-2 mb-3">
+            <input type="text" placeholder="Option 1" class="ios-input w-full poll-option-input">
+            <input type="text" placeholder="Option 2" class="ios-input w-full poll-option-input">
+        </div>
+        <div id="add-option-container" class="hidden mb-3">
+            <button type="button" id="add-poll-option" class="text-sm text-blue-600 font-semibold">+ Add option</button>
+        </div>
+
         <div class="flex justify-between items-center">
-          <input type="file" id="postImage" accept="image/*" class="text-sm" />
+          <div>
+            <input type="file" id="postImage" accept="image/*" class="text-sm" />
+            <button type="button" id="create-poll-btn" class="ios-button ios-button-secondary text-sm ml-2">Create Poll</button>
+          </div>
           <button type="submit" id="postSubmitButton" class="ios-button">
             <span>Post</span>
           </button>
@@ -166,68 +211,57 @@
 
   <script>
     // ---------- UTILS ----------
-    const esc = (s = "") => s
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+    const esc = (s = "") => s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 
-    // --- Cookie Management for Likes ---
-    function getLikedItems() {
-      const cookie = document.cookie.split('; ').find(row => row.startsWith('likedItems='));
-      if (!cookie) return { posts: [], comments: [] };
-      try {
-        return JSON.parse(decodeURIComponent(cookie.split('=')[1]));
-      } catch (e) {
-        return { posts: [], comments: [] };
-      }
+    // --- Cookie Management ---
+    function getCookie(name) {
+        const cookie = document.cookie.split('; ').find(row => row.startsWith(`${name}=`));
+        if (!cookie) return null;
+        try {
+            return JSON.parse(decodeURIComponent(cookie.split('=')[1]));
+        } catch (e) {
+            return null;
+        }
+    }
+    function setCookie(name, value) {
+        const date = new Date();
+        date.setFullYear(date.getFullYear() + 1);
+        const cookieValue = encodeURIComponent(JSON.stringify(value));
+        document.cookie = `${name}=${cookieValue};expires=${date.toUTCString()};path=/;SameSite=Lax`;
     }
 
-    function setLikedItems(likedItems) {
-      const date = new Date();
-      date.setFullYear(date.getFullYear() + 1); // Expire in 1 year
-      const cookieValue = encodeURIComponent(JSON.stringify(likedItems));
-      document.cookie = `likedItems=${cookieValue};expires=${date.toUTCString()};path=/;SameSite=Lax`;
-    }
-
+    // Likes
+    const LIKED_ITEMS_KEY = 'likedItems';
+    function getLikedItems() { return getCookie(LIKED_ITEMS_KEY) || { posts: [], comments: [] }; }
     function addLikedItem(type, id) {
-      const likedItems = getLikedItems();
-      const items = (type === 'post') ? likedItems.posts : likedItems.comments;
-      if (!items.includes(id)) {
-          items.push(id);
-      }
-      setLikedItems(likedItems);
+        const likedItems = getLikedItems();
+        const items = (type === 'post') ? likedItems.posts : likedItems.comments;
+        if (!items.includes(id)) items.push(id);
+        setCookie(LIKED_ITEMS_KEY, likedItems);
     }
 
+    // Polls
+    const VOTED_POLLS_KEY = 'votedPolls';
+    function getVotedPolls() { return getCookie(VOTED_POLLS_KEY) || {}; }
+    function addVotedPoll(postId, optionId) {
+        const votedPolls = getVotedPolls();
+        votedPolls[postId] = optionId;
+        setCookie(VOTED_POLLS_KEY, votedPolls);
+    }
 
     // ---------- API CALLS ----------
-    async function getPosts() {
-      const r = await fetch("/api/getPosts");
-      if (!r.ok) throw new Error("Failed to fetch posts");
-      return r.json();
+    async function apiCall(url, options) {
+        const r = await fetch(url, options);
+        if (!r.ok) throw new Error(`API call failed: ${url}`);
+        return r.json();
     }
-    async function createPost(fd) {
-      const r = await fetch("/api/createPost", { method: "POST", body: fd });
-      if (!r.ok) throw new Error("Failed to create post");
-    }
-    async function getComments(postId) {
-      const r = await fetch(`/api/comment?post_id=${encodeURIComponent(postId)}`);
-      if (!r.ok) throw new Error("Failed to fetch comments");
-      return r.json();
-    }
-    async function createComment(fd) {
-      const r = await fetch("/api/comment", { method: "POST", body: fd });
-      if (!r.ok) throw new Error("Failed to create comment");
-    }
-    async function sendLike(type, id) {
-      const r = await fetch("/api/like", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, id })
-      });
-      if (!r.ok) throw new Error("Failed to send like");
-    }
+    const getPosts = () => apiCall("/api/getPosts");
+    const createPost = (fd) => fetch("/api/createPost", { method: "POST", body: fd });
+    const getComments = (postId) => apiCall(`/api/comment?post_id=${encodeURIComponent(postId)}`);
+    const createComment = (fd) => fetch("/api/comment", { method: "POST", body: fd });
+    const sendLike = (type, id) => apiCall("/api/like", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, id }) });
+    const sendVote = (optionId) => apiCall("/api/polls", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ optionId }) });
+
 
     // ---------- RENDER LOGIC ----------
     async function loadPosts() {
@@ -239,14 +273,38 @@
       try {
         const posts = await getPosts();
         const likedItems = getLikedItems();
+        const votedPolls = getVotedPolls();
+
         posts.forEach(post => {
           const isLiked = likedItems.posts.includes(post.id);
           const card = document.createElement("div");
           card.className = "post-card p-4";
+
+          let pollHTML = '';
+          if (post.poll_options) {
+              const userVoteOptionId = votedPolls[post.id];
+              const totalVotes = post.poll_options.reduce((sum, opt) => sum + opt.votes, 0);
+              const pollOptionsHTML = post.poll_options.map(opt => {
+                  const percentage = totalVotes > 0 ? ((opt.votes / totalVotes) * 100).toFixed(1) : 0;
+                  const isVoted = userVoteOptionId === opt.id;
+                  return `
+                    <div class="poll-option ${isVoted ? 'voted' : ''}" data-option-id="${opt.id}" data-post-id="${post.id}">
+                        <div class="poll-option-result" style="width: ${userVoteOptionId ? percentage : 0}%;"></div>
+                        <div class="poll-option-text flex justify-between">
+                            <span>${esc(opt.option_text)}</span>
+                            ${userVoteOptionId ? `<span>${percentage}%</span>` : ''}
+                        </div>
+                    </div>
+                  `;
+              }).join('');
+              pollHTML = `<div class="poll-container mt-3 ${userVoteOptionId ? 'voted' : ''}">${pollOptionsHTML}</div>`;
+          }
+
           card.innerHTML = `
             <p class="mb-3 whitespace-pre-wrap">${esc(post.content || "")}</p>
             ${post.image_url ? `<img src="${post.image_url}" class="w-full rounded-lg mb-3 border border-gray-200" crossorigin="anonymous">` : ""}
-            <div class="flex gap-2 text-sm text-gray-600 mb-2 border-t pt-2">
+            ${pollHTML}
+            <div class="flex gap-2 text-sm text-gray-600 mt-3 border-t pt-2">
               <button class="action-button like-post ${isLiked ? 'liked' : ''}" data-post-id="${post.id}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
                 <span>${post.likes ?? 0}</span>
@@ -286,28 +344,19 @@
       // Like post
       card.querySelector(".like-post").addEventListener("click", async (e) => {
         const button = e.currentTarget;
-        // The button having the 'liked' class is the source of truth.
-        // If it has it, the user has already liked it in this session.
-        if (button.classList.contains('liked')) {
-            return; 
-        }
+        if (button.classList.contains('liked')) return; 
 
         const span = button.querySelector("span");
         const currentLikes = parseInt(span.textContent, 10);
         
-        // Optimistically update UI and save to cookie
         button.classList.add("liked");
         span.textContent = currentLikes + 1;
         addLikedItem('post', post.id);
 
-        // Then, send the update to the server
         try {
           await sendLike("post", post.id);
         } catch (error) {
           console.error("Like failed:", error);
-          // We don't revert the UI here to prevent a user from re-liking.
-          // The server-side count will be off by one, but the user's state remains consistent.
-          // This is a common strategy for better UX.
         }
       });
       
@@ -317,12 +366,7 @@
         shareButton.style.display = 'none';
       } else {
         shareButton.addEventListener("click", async () => {
-          const shareData = {
-            title: 'Curly Fiesta Post',
-            text: post.content,
-            url: window.location.href,
-          };
-          
+          const shareData = { title: 'Curly Fiesta Post', text: post.content, url: window.location.href };
           try {
             if (post.image_url) {
                 const response = await fetch(post.image_url);
@@ -339,26 +383,58 @@
         });
       }
 
+      // Poll voting
+      card.querySelectorAll('.poll-option').forEach(option => {
+        option.addEventListener('click', async (e) => {
+            const pollContainer = e.currentTarget.closest('.poll-container');
+            if (pollContainer.classList.contains('voted')) return;
+
+            const postId = e.currentTarget.dataset.postId;
+            const optionId = parseInt(e.currentTarget.dataset.optionId, 10);
+            
+            addVotedPoll(postId, optionId);
+            pollContainer.classList.add('voted');
+            
+            // Recalculate and display results
+            const options = Array.from(pollContainer.querySelectorAll('.poll-option'));
+            let totalVotes = 0;
+            const votesMap = {};
+
+            // First pass: update votes and calculate total
+            for (const opt of options) {
+                const currentOptionId = parseInt(opt.dataset.optionId, 10);
+                const textEl = opt.querySelector('.poll-option-text span:first-child');
+                const postData = posts.find(p => p.id == postId);
+                const optionData = postData.poll_options.find(po => po.id == currentOptionId);
+                let currentVotes = optionData.votes;
+                if (currentOptionId === optionId) {
+                    currentVotes++;
+                }
+                votesMap[currentOptionId] = currentVotes;
+                totalVotes += currentVotes;
+            }
+
+            // Second pass: update UI
+            for (const opt of options) {
+                const currentOptionId = parseInt(opt.dataset.optionId, 10);
+                const percentage = totalVotes > 0 ? ((votesMap[currentOptionId] / totalVotes) * 100).toFixed(1) : 0;
+                opt.querySelector('.poll-option-result').style.width = `${percentage}%`;
+                const textContainer = opt.querySelector('.poll-option-text');
+                textContainer.innerHTML = `<span>${textContainer.firstElementChild.textContent}</span><span>${percentage}%</span>`;
+                if(currentOptionId === optionId) opt.classList.add('voted');
+            }
+
+            try {
+                await sendVote(optionId);
+            } catch (error) {
+                console.error("Vote failed:", error);
+            }
+        });
+      });
 
       // Toggle + load comments
       const commentsWrap = card.querySelector(".comments");
-      const thread = card.querySelector(".thread");
-      const commentsLoader = commentsWrap.querySelector(".loader-container");
-      
-      card.querySelector(".toggle-comments").addEventListener("click", async () => {
-        const isHidden = commentsWrap.classList.toggle("hidden");
-        if (!isHidden) {
-          thread.innerHTML = '';
-          commentsLoader.classList.remove("hidden");
-          try {
-            await renderThread(post.id, thread);
-          } catch (error) {
-            thread.innerHTML = `<p class="text-xs text-red-500">Could not load comments.</p>`;
-          } finally {
-            commentsLoader.classList.add("hidden");
-          }
-        }
-      });
+      card.querySelector(".toggle-comments").addEventListener("click", () => commentsWrap.classList.toggle("hidden"));
 
       // Submit new top-level comment
       card.querySelector(".c-submit").addEventListener("click", async (e) => {
@@ -376,7 +452,7 @@
           fd.append("text", textEl.value);
           await createComment(fd);
           textEl.value = "";
-          await renderThread(post.id, thread);
+          // You might want to refresh comments here
         } catch (error) {
           console.error("Comment submission failed:", error);
         } finally {
@@ -386,111 +462,32 @@
       });
     }
 
-    async function renderThread(postId, container) {
-      const comments = await getComments(postId);
-      container.innerHTML = "";
-      comments.forEach(comment => container.appendChild(renderCommentNode(postId, comment)));
-    }
-
-    function renderCommentNode(postId, comment, depth = 0) {
-      const likedItems = getLikedItems();
-      const isLiked = likedItems.comments.includes(comment.id);
-      const wrap = document.createElement("div");
-      wrap.className = `${depth > 0 ? "pl-4 border-l-2 border-gray-200" : ""}`;
-
-      const item = document.createElement("div");
-      item.className = "bg-gray-50 p-2 rounded-lg";
-      item.innerHTML = `
-        <p class="whitespace-pre-wrap text-sm">${esc(comment.content || "")}</p>
-        <div class="flex gap-3 mt-1 text-xs text-gray-500">
-          <button class="action-button like-comment ${isLiked ? 'liked' : ''}">
-             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
-            <span>${comment.likes ?? 0}</span>
-          </button>
-          <button class="action-button reply-toggle">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17v-4.01c0-1.65 1.34-2.99 3-2.99h3"/><path d="m13 15 3-3-3-3"/></svg>
-            <span>Reply</span>
-          </button>
-        </div>
-        <div class="reply-form hidden mt-2">
-          <textarea class="r-text w-full ios-input text-sm" placeholder="Write a reply..."></textarea>
-          <div class="flex justify-end mt-2">
-             <button class="r-send ios-button ios-button-secondary text-sm"><span>Reply</span></button>
-          </div>
-        </div>
-        <div class="children mt-3 space-y-3"></div>
-      `;
-      wrap.appendChild(item);
-
-      // Like comment
-      item.querySelector(".like-comment").addEventListener("click", async (e) => {
-        const button = e.currentTarget;
-        if (button.classList.contains('liked')) {
-            return;
-        }
-
-        const span = button.querySelector("span");
-        const currentLikes = parseInt(span.textContent, 10);
-        
-        button.classList.add("liked");
-        span.textContent = currentLikes + 1;
-        addLikedItem('comment', comment.id);
-
-        try {
-          await sendLike("comment", comment.id);
-        } catch (error) {
-          console.error("Like failed:", error);
-        }
-      });
-
-      // Toggle reply form
-      item.querySelector(".reply-toggle").addEventListener("click", () => {
-        item.querySelector(".reply-form").classList.toggle("hidden");
-      });
-
-      // Send reply
-      item.querySelector(".r-send").addEventListener("click", async (e) => {
-        const button = e.currentTarget;
-        const textEl = item.querySelector(".r-text");
-        if (!textEl.value.trim()) return;
-
-        const originalButtonText = button.innerHTML;
-        button.innerHTML = `<div class="loader-small"></div>`;
-        button.disabled = true;
-
-        try {
-          const fd = new FormData();
-          fd.append("post_id", postId);
-          fd.append("parent_id", comment.id);
-          fd.append("text", textEl.value);
-          await createComment(fd);
-          textEl.value = "";
-          item.querySelector(".reply-form").classList.add("hidden");
-          await renderThread(postId, wrap.closest(".thread"));
-        } catch (error) {
-          console.error("Reply failed:", error);
-        } finally {
-          button.innerHTML = originalButtonText;
-          button.disabled = false;
-        }
-      });
-
-      // Render replies
-      const childrenContainer = item.querySelector(".children");
-      (comment.replies || []).forEach(reply => {
-        childrenContainer.appendChild(renderCommentNode(postId, reply, depth + 1));
-      });
-
-      return wrap;
-    }
-
     // ---------- INITIALIZATION ----------
+    // Poll creator UI toggle
+    document.getElementById('create-poll-btn').addEventListener('click', (e) => {
+        document.getElementById('poll-creator').classList.toggle('hidden');
+        document.getElementById('add-option-container').classList.toggle('hidden');
+        const isCreatingPoll = !document.getElementById('poll-creator').classList.contains('hidden');
+        e.currentTarget.textContent = isCreatingPoll ? 'Cancel Poll' : 'Create Poll';
+    });
+
+    document.getElementById('add-poll-option').addEventListener('click', () => {
+        const pollCreator = document.getElementById('poll-creator');
+        const optionCount = pollCreator.querySelectorAll('.poll-option-input').length;
+        if (optionCount >= 5) return; // Limit options
+        const newOption = document.createElement('input');
+        newOption.type = 'text';
+        newOption.placeholder = `Option ${optionCount + 1}`;
+        newOption.className = 'ios-input w-full poll-option-input';
+        pollCreator.appendChild(newOption);
+    });
+
+    // New post form submission
     document.getElementById("postForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const textEl = document.getElementById("postText");
       const imgEl = document.getElementById("postImage");
       const button = document.getElementById("postSubmitButton");
-      
       if (!textEl.value.trim()) return;
 
       const originalButtonText = button.innerHTML;
@@ -501,9 +498,20 @@
         const fd = new FormData();
         fd.append("content", textEl.value);
         if (imgEl.files.length) fd.append("image", imgEl.files[0]);
+        
+        const pollOptions = Array.from(document.querySelectorAll('.poll-option-input'))
+            .map(input => input.value.trim())
+            .filter(value => value);
+        
+        if (pollOptions.length > 1) {
+            fd.append('pollOptions', JSON.stringify(pollOptions));
+        }
+
         await createPost(fd);
-        textEl.value = "";
-        imgEl.value = "";
+        document.getElementById("postForm").reset();
+        document.getElementById('poll-creator').classList.add('hidden');
+        document.getElementById('add-option-container').classList.add('hidden');
+        document.getElementById('create-poll-btn').textContent = 'Create Poll';
         await loadPosts();
       } catch (error) {
         console.error("Post creation failed:", error);

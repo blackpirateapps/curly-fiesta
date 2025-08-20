@@ -1,6 +1,6 @@
 import Busboy from "busboy";
 import { db } from "../lib/db.js";
-import { put } from "@vercel/blob";   // 👈 new SDK
+import { put } from "@vercel/blob";
 
 export const config = {
   api: {
@@ -17,24 +17,37 @@ export default async function handler(req, res) {
     const { fields, file } = await parseForm(req);
 
     const content = fields.content || "";
+    const pollOptions = fields.pollOptions ? JSON.parse(fields.pollOptions) : null;
     let imageUrl = null;
 
     if (file) {
-      // 👇 Use Vercel Blob SDK to store
       const blob = await put(file.filename, file.buffer, {
-        access: "public", // public URL
+        access: "public",
       });
-      console.log("Blob response:", blob);
-
-      imageUrl = blob.url; // permanent URL
+      imageUrl = blob.url;
     }
 
-    await db.execute({
+    // Insert the main post
+    const postResult = await db.execute({
       sql: "INSERT INTO posts (content, likes, created_at, image_url) VALUES (?, 0, datetime('now'), ?)",
       args: [content, imageUrl ?? null],
     });
 
-    return res.status(200).json({ success: true });
+    const postId = postResult.lastInsertRowid;
+
+    // If it's a poll, insert the options
+    if (pollOptions && pollOptions.length > 0 && postId) {
+        const insertPromises = pollOptions.map(optionText => {
+            return db.execute({
+                sql: "INSERT INTO poll_options (post_id, option_text, votes) VALUES (?, ?, 0)",
+                args: [postId, optionText]
+            });
+        });
+        await Promise.all(insertPromises);
+    }
+
+
+    return res.status(200).json({ success: true, postId });
   } catch (err) {
     console.error("createPost error:", err);
     return res.status(500).json({ error: "Failed to create post" });
