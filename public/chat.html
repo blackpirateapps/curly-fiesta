@@ -8,14 +8,20 @@
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
     <style>
+        /* --- NEW CSS GRID LAYOUT --- */
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #f7f7f8;
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-rows: auto 1fr auto; /* Header, Main (fills space), Footer */
             height: 100vh;
             overflow: hidden;
         }
+        #chat-messages {
+            overflow-y: auto; /* The main area scrolls, not the body */
+        }
+        /* --- End of New Layout --- */
+
         .app-header {
             background-color: #ffffff;
             border-bottom: 1px solid #e5e7eb;
@@ -54,7 +60,6 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .modal-backdrop { background-color: rgba(0,0,0,0.5); }
         
-        /* Panel Styles */
         .panel {
             position: absolute;
             bottom: 100%;
@@ -121,7 +126,8 @@
         <div></div>
     </header>
 
-    <main id="chat-messages" class="flex-1 p-4 overflow-y-auto"></main>
+    <!-- Note: Removed flex-1 from main tag -->
+    <main id="chat-messages" class="p-4"></main>
 
     <footer class="bg-white border-t border-gray-200 p-3 relative">
         <form id="chat-form" class="flex gap-2 items-center">
