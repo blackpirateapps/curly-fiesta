@@ -23,6 +23,7 @@
             max-width: 75%;
             padding: 8px 12px;
             border-radius: 18px;
+            word-wrap: break-word;
         }
         .chat-bubble.sent {
             background-color: #007aff;
@@ -37,6 +38,19 @@
         #chat-messages {
             scroll-behavior: smooth;
         }
+        .loader {
+          width: 24px;
+          height: 24px;
+          border: 3px solid #f3f3f3;
+          border-top: 3px solid #007aff;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+          margin: 20px auto;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -48,13 +62,14 @@
     </header>
 
     <main id="chat-messages" class="flex-1 p-4 overflow-y-auto flex flex-col gap-3">
+        <div id="history-loader" class="loader"></div>
         <!-- Messages will be injected here -->
     </main>
 
     <footer class="p-3 bg-white border-t border-gray-200 sticky bottom-0">
         <form id="chat-form" class="flex gap-2">
-            <input id="chat-input" type="text" placeholder="Type a message..." class="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <button type="submit" class="bg-blue-600 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center">
+            <input id="chat-input" type="text" placeholder="Type a message..." class="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500" disabled>
+            <button id="chat-submit" type="submit" class="bg-blue-600 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center" disabled>
                 &uarr;
             </button>
         </form>
@@ -63,41 +78,70 @@
     <script>
         const form = document.getElementById('chat-form');
         const input = document.getElementById('chat-input');
+        const submitButton = document.getElementById('chat-submit');
         const messages = document.getElementById('chat-messages');
+        const historyLoader = document.getElementById('history-loader');
 
         // Function to authenticate with our backend and get an Ably token
         async function getAblyToken() {
             const response = await fetch('/api/ably-auth');
+            if (!response.ok) {
+                throw new Error('Failed to get Ably token');
+            }
             return response.json();
         }
 
         async function initializeAbly() {
-            const tokenRequest = await getAblyToken();
-            
-            const ably = new Ably.Realtime({
-                authCallback: (params, callback) => {
-                    // This function will be called by Ably when it needs a new token
-                    getAblyToken().then(token => callback(null, token));
-                }
-            });
+            try {
+                const ably = new Ably.Realtime({
+                    authUrl: '/api/ably-auth',
+                    authMethod: 'GET'
+                });
 
-            const channel = ably.channels.get('live-chat');
+                ably.connection.on('connected', () => {
+                    input.disabled = false;
+                    submitButton.disabled = false;
+                });
 
-            // Subscribe to messages
-            channel.subscribe('message', (message) => {
-                const isSentByMe = message.clientId === ably.auth.clientId;
-                addMessage(message.data.text, isSentByMe ? 'sent' : 'received');
-            });
+                const channel = ably.channels.get('live-chat');
 
-            // Handle form submission
-            form.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const text = input.value.trim();
-                if (text) {
-                    channel.publish('message', { text: text });
-                    input.value = '';
-                }
-            });
+                // ** NEW: Fetch message history **
+                channel.history({ limit: 25 }, (err, resultPage) => {
+                    if (err) {
+                        console.error("Error fetching history:", err);
+                        return;
+                    }
+                    
+                    // Clear the loader and add messages
+                    historyLoader.style.display = 'none';
+                    resultPage.items.forEach(message => {
+                        // All historical messages will appear as 'received'
+                        addMessage(message.data.text, 'received');
+                    });
+                    
+                    // ** THEN, subscribe to new messages **
+                    channel.subscribe('message', (message) => {
+                        const isSentByMe = message.clientId === ably.auth.clientId;
+                        addMessage(message.data.text, isSentByMe ? 'sent' : 'received');
+                    });
+                });
+
+
+                // Handle form submission
+                form.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const text = input.value.trim();
+                    if (text && ably.connection.state === 'connected') {
+                        channel.publish('message', { text: text });
+                        input.value = '';
+                    }
+                });
+
+            } catch (error) {
+                console.error("Ably initialization failed:", error);
+                addMessage("Could not connect to chat. Please try again later.", "received");
+                historyLoader.style.display = 'none';
+            }
         }
 
         function addMessage(text, type) {
