@@ -2,195 +2,442 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Mini Forum</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Curly Fiesta</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* --- iOS System Font & Base Styles --- */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+      background-color: #f0f2f5; /* A very light gray, common in iOS apps */
+    }
+
+    /* --- App Header --- */
+    .app-header {
+      background-color: #ffffff;
+      border-bottom: 1px solid #d1d1d6;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      background-color: rgba(255, 255, 255, 0.8);
+    }
+
+    /* --- iOS-style Cards --- */
+    .post-card {
+      background-color: #ffffff;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border: 1px solid #e5e5e5;
+    }
+    
+    /* --- iOS-style Inputs & Buttons --- */
+    textarea.ios-input, input.ios-input {
+      border: 1px solid #d1d1d6;
+      border-radius: 8px;
+      padding: 10px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    textarea.ios-input:focus, input.ios-input:focus {
+      outline: none;
+      border-color: #007aff;
+      box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
+    }
+    
+    .ios-button {
+      background-color: #007aff;
+      color: white;
+      font-weight: 600;
+      border-radius: 8px;
+      padding: 10px 16px;
+      transition: background-color 0.2s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .ios-button:hover {
+      background-color: #005ecb;
+    }
+    .ios-button:disabled {
+      background-color: #d1d1d6;
+      cursor: not-allowed;
+    }
+    
+    .ios-button-secondary {
+       background-color: #e5e5e5;
+       color: #007aff;
+    }
+     .ios-button-secondary:hover {
+       background-color: #dcdcdc;
+    }
+
+    /* --- Loading Spinner Animation --- */
+    .loader {
+      width: 24px;
+      height: 24px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #007aff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    .loader-small {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #007aff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    .loader-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    /* --- Action Buttons (Like/Comment) --- */
+    .action-button {
+      background: none;
+      border: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #6b7280;
+      font-weight: 500;
+      padding: 4px;
+      border-radius: 6px;
+      transition: background-color 0.2s;
+    }
+    .action-button:hover {
+      background-color: #f0f2f5;
+    }
+    .action-button.liked svg {
+      fill: #ff3b30;
+      color: #ff3b30;
+    }
+  </style>
 </head>
 <body class="bg-gray-100 text-gray-900">
-  <div class="max-w-2xl mx-auto p-4">
-    <h1 class="text-2xl font-bold mb-4 text-center">Mini Forum</h1>
 
-    <form id="postForm" class="bg-white p-4 rounded-xl shadow mb-6" enctype="multipart/form-data">
-      <textarea id="postText" placeholder="What's on your mind?" class="w-full p-2 border rounded mb-2" required></textarea>
-      <input type="file" id="postImage" accept="image/*" class="mb-2" />
-      <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Post</button>
-    </form>
+  <header class="app-header text-center p-3">
+    <h1 class="text-xl font-bold">Curly Fiesta</h1>
+  </header>
 
+  <main class="max-w-xl mx-auto p-3">
+    <!-- New Post Form -->
+    <div class="post-card p-4">
+      <form id="postForm" enctype="multipart/form-data">
+        <textarea id="postText" placeholder="What's happening?" class="ios-input w-full p-2 mb-3" required></textarea>
+        <div class="flex justify-between items-center">
+          <input type="file" id="postImage" accept="image/*" class="text-sm" />
+          <button type="submit" id="postSubmitButton" class="ios-button">
+            <span>Post</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Posts Container -->
     <div id="posts"></div>
-  </div>
+    
+    <!-- Initial Loading Spinner -->
+    <div id="main-loader" class="loader-container">
+      <div class="loader"></div>
+    </div>
+  </main>
 
   <script>
-    // ---------- utils ----------
-    const esc = (s="") => s
+    // ---------- UTILS ----------
+    const esc = (s = "") => s
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
 
-    // ---------- API ----------
+    // ---------- API CALLS ----------
     async function getPosts() {
       const r = await fetch("/api/getPosts");
+      if (!r.ok) throw new Error("Failed to fetch posts");
       return r.json();
     }
     async function createPost(fd) {
-      await fetch("/api/createPost", { method: "POST", body: fd });
+      const r = await fetch("/api/createPost", { method: "POST", body: fd });
+      if (!r.ok) throw new Error("Failed to create post");
     }
     async function getComments(postId) {
       const r = await fetch(`/api/comment?post_id=${encodeURIComponent(postId)}`);
-      return r.json(); // expects nested [{..., replies:[...]}, ...]
+      if (!r.ok) throw new Error("Failed to fetch comments");
+      return r.json();
     }
     async function createComment(fd) {
-      await fetch("/api/comment", { method: "POST", body: fd });
+      const r = await fetch("/api/comment", { method: "POST", body: fd });
+      if (!r.ok) throw new Error("Failed to create comment");
     }
-    async function sendLike(type, id, action="like") {
-      await fetch("/api/like", {
+    async function sendLike(type, id) {
+      const r = await fetch("/api/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, id, action })
+        body: JSON.stringify({ type, id })
       });
+      if (!r.ok) throw new Error("Failed to send like");
     }
 
-    // ---------- render ----------
+    // ---------- RENDER LOGIC ----------
     async function loadPosts() {
-      const posts = await getPosts();
-      const root = document.getElementById("posts");
-      root.innerHTML = "";
+      const mainLoader = document.getElementById("main-loader");
+      const postsContainer = document.getElementById("posts");
+      mainLoader.classList.remove("hidden");
+      postsContainer.innerHTML = "";
 
-      posts.forEach(post => {
-        const card = document.createElement("div");
-        card.className = "bg-white p-4 rounded-xl shadow mb-4";
-        card.innerHTML = `
-          <p class="mb-2 whitespace-pre-wrap">${esc(post.content || "")}</p>
-          ${post.image_url ? `<img src="${post.image_url}" class="w-full max-h-60 object-cover rounded mb-2">` : ""}
-          <div class="flex gap-4 text-sm text-gray-600 mb-2">
-            <button class="like-post">❤️ <span>${post.likes ?? 0}</span></button>
-            <button class="toggle-comments">💬 Comments</button>
-          </div>
-          <div class="comments hidden">
-            <div class="mt-2">
-              <textarea class="c-text w-full p-2 border rounded mb-2" placeholder="Write a comment..."></textarea>
-              <input type="file" class="c-file mb-2" accept="image/*" />
-              <button class="c-submit bg-green-600 text-white px-3 py-1 rounded">Comment</button>
+      try {
+        const posts = await getPosts();
+        posts.forEach(post => {
+          const card = document.createElement("div");
+          card.className = "post-card p-4";
+          card.innerHTML = `
+            <p class="mb-3 whitespace-pre-wrap">${esc(post.content || "")}</p>
+            ${post.image_url ? `<img src="${post.image_url}" class="w-full rounded-lg mb-3 border border-gray-200">` : ""}
+            <div class="flex gap-4 text-sm text-gray-600 mb-2 border-t pt-2">
+              <button class="action-button like-post" data-post-id="${post.id}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                <span>${post.likes ?? 0}</span>
+              </button>
+              <button class="action-button toggle-comments">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span>Comments</span>
+              </button>
             </div>
-            <div class="thread mt-3 space-y-2"></div>
-          </div>
-        `;
-        root.appendChild(card);
+            <div class="comments hidden mt-3">
+              <div class="loader-container hidden"><div class="loader"></div></div>
+              <div class="thread space-y-3"></div>
+              <div class="mt-4">
+                <textarea class="c-text w-full ios-input text-sm" placeholder="Add a comment..."></textarea>
+                <div class="flex justify-end mt-2">
+                  <button class="c-submit ios-button ios-button-secondary text-sm"><span>Comment</span></button>
+                </div>
+              </div>
+            </div>
+          `;
+          postsContainer.appendChild(card);
 
-        // like post
-        card.querySelector(".like-post").addEventListener("click", async () => {
-          await sendLike("post", post.id, "like");
-          loadPosts();
+          // Event Listeners for the new card
+          addPostEventListeners(card, post);
         });
+      } catch (error) {
+        postsContainer.innerHTML = `<div class="post-card p-4 text-red-500">Could not load posts. Please try again later.</div>`;
+        console.error(error);
+      } finally {
+        mainLoader.classList.add("hidden");
+      }
+    }
 
-        // toggle + load comments
-        const commentsWrap = card.querySelector(".comments");
-        const thread = card.querySelector(".thread");
-        card.querySelector(".toggle-comments").addEventListener("click", async () => {
-          commentsWrap.classList.toggle("hidden");
-          if (!commentsWrap.classList.contains("hidden")) {
+    function addPostEventListeners(card, post) {
+      // Like post
+      card.querySelector(".like-post").addEventListener("click", async (e) => {
+        const button = e.currentTarget;
+        const span = button.querySelector("span");
+        const svg = button.querySelector("svg");
+        const currentLikes = parseInt(span.textContent, 10);
+        
+        button.disabled = true;
+        svg.classList.add("liked");
+        span.textContent = currentLikes + 1;
+
+        try {
+          await sendLike("post", post.id);
+        } catch (error) {
+          console.error("Like failed:", error);
+          svg.classList.remove("liked"); // Revert on error
+          span.textContent = currentLikes;
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      // Toggle + load comments
+      const commentsWrap = card.querySelector(".comments");
+      const thread = card.querySelector(".thread");
+      const commentsLoader = commentsWrap.querySelector(".loader-container");
+      
+      card.querySelector(".toggle-comments").addEventListener("click", async () => {
+        const isHidden = commentsWrap.classList.toggle("hidden");
+        if (!isHidden) {
+          thread.innerHTML = '';
+          commentsLoader.classList.remove("hidden");
+          try {
             await renderThread(post.id, thread);
+          } catch (error) {
+            thread.innerHTML = `<p class="text-xs text-red-500">Could not load comments.</p>`;
+          } finally {
+            commentsLoader.classList.add("hidden");
           }
-        });
+        }
+      });
 
-        // submit new top-level comment
-        card.querySelector(".c-submit").addEventListener("click", async () => {
-          const textEl = card.querySelector(".c-text");
-          const fileEl = card.querySelector(".c-file");
+      // Submit new top-level comment
+      card.querySelector(".c-submit").addEventListener("click", async (e) => {
+        const button = e.currentTarget;
+        const textEl = card.querySelector(".c-text");
+        if (!textEl.value.trim()) return;
+
+        const originalButtonText = button.innerHTML;
+        button.innerHTML = `<div class="loader-small"></div>`;
+        button.disabled = true;
+        
+        try {
           const fd = new FormData();
           fd.append("post_id", post.id);
           fd.append("text", textEl.value);
-          if (fileEl.files.length) fd.append("image", fileEl.files[0]);
           await createComment(fd);
-          textEl.value = ""; fileEl.value = "";
+          textEl.value = "";
           await renderThread(post.id, thread);
-        });
+        } catch (error) {
+          console.error("Comment submission failed:", error);
+        } finally {
+          button.innerHTML = originalButtonText;
+          button.disabled = false;
+        }
       });
     }
 
     async function renderThread(postId, container) {
-      const data = await getComments(postId); // nested
+      const comments = await getComments(postId);
       container.innerHTML = "";
-      data.forEach(node => container.appendChild(renderNode(postId, node)));
+      comments.forEach(comment => container.appendChild(renderCommentNode(postId, comment)));
     }
 
-    function renderNode(postId, node, depth=0) {
+    function renderCommentNode(postId, comment, depth = 0) {
       const wrap = document.createElement("div");
-      wrap.className = `${depth ? "pl-3 border-l border-gray-200" : ""}`;
+      wrap.className = `${depth > 0 ? "pl-4 border-l-2 border-gray-200" : ""}`;
 
       const item = document.createElement("div");
-      item.className = "bg-gray-100 rounded p-2";
+      item.className = "bg-gray-50 p-2 rounded-lg";
       item.innerHTML = `
-        <div class="whitespace-pre-wrap text-sm">${esc(node.content || "")}</div>
-        ${node.image_url ? `<img src="${node.image_url}" class="w-40 rounded mt-2">` : ""}
-        <div class="flex gap-3 mt-1 text-xs text-gray-600">
-          <button class="like-comment">❤️ <span>${node.likes ?? 0}</span></button>
-          <button class="reply-toggle">↩️ Reply</button>
+        <p class="whitespace-pre-wrap text-sm">${esc(comment.content || "")}</p>
+        <div class="flex gap-3 mt-1 text-xs text-gray-500">
+          <button class="action-button like-comment">
+             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+            <span>${comment.likes ?? 0}</span>
+          </button>
+          <button class="action-button reply-toggle">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17v-4.01c0-1.65 1.34-2.99 3-2.99h3"/><path d="m13 15 3-3-3-3"/></svg>
+            <span>Reply</span>
+          </button>
         </div>
         <div class="reply-form hidden mt-2">
-          <textarea class="r-text w-full p-2 border rounded mb-2" placeholder="Write a reply..."></textarea>
-          <input type="file" class="r-file mb-2" accept="image/*" />
-          <button class="r-send bg-blue-600 text-white px-3 py-1 rounded">Reply</button>
+          <textarea class="r-text w-full ios-input text-sm" placeholder="Write a reply..."></textarea>
+          <div class="flex justify-end mt-2">
+             <button class="r-send ios-button ios-button-secondary text-sm"><span>Reply</span></button>
+          </div>
         </div>
-        <div class="children mt-2 space-y-2"></div>
+        <div class="children mt-3 space-y-3"></div>
       `;
       wrap.appendChild(item);
 
-      // like comment
-      item.querySelector(".like-comment").addEventListener("click", async () => {
-        await sendLike("comment", node.id, "like");
-        // simple refresh: reload thread at parent level
-        const root = wrap.closest(".thread");
-        await renderThread(postId, root);
+      // Like comment
+      item.querySelector(".like-comment").addEventListener("click", async (e) => {
+        const button = e.currentTarget;
+        const span = button.querySelector("span");
+        const svg = button.querySelector("svg");
+        const currentLikes = parseInt(span.textContent, 10);
+        
+        button.disabled = true;
+        svg.classList.add("liked");
+        span.textContent = currentLikes + 1;
+
+        try {
+          await sendLike("comment", comment.id);
+        } catch (error) {
+          console.error("Like failed:", error);
+          svg.classList.remove("liked");
+          span.textContent = currentLikes;
+        } finally {
+          button.disabled = false;
+        }
       });
 
-      // toggle reply
+      // Toggle reply form
       item.querySelector(".reply-toggle").addEventListener("click", () => {
         item.querySelector(".reply-form").classList.toggle("hidden");
       });
 
-      // send reply
-      item.querySelector(".r-send").addEventListener("click", async () => {
-        const txt = item.querySelector(".r-text");
-        const file = item.querySelector(".r-file");
-        const fd = new FormData();
-        fd.append("post_id", postId);
-        fd.append("parent_id", node.id);
-        fd.append("text", txt.value);
-        if (file.files.length) fd.append("image", file.files[0]);
-        await createComment(fd);
-        txt.value=""; file.value="";
-        const root = wrap.closest(".thread");
-        await renderThread(postId, root);
+      // Send reply
+      item.querySelector(".r-send").addEventListener("click", async (e) => {
+        const button = e.currentTarget;
+        const textEl = item.querySelector(".r-text");
+        if (!textEl.value.trim()) return;
+
+        const originalButtonText = button.innerHTML;
+        button.innerHTML = `<div class="loader-small"></div>`;
+        button.disabled = true;
+
+        try {
+          const fd = new FormData();
+          fd.append("post_id", postId);
+          fd.append("parent_id", comment.id);
+          fd.append("text", textEl.value);
+          await createComment(fd);
+          textEl.value = "";
+          item.querySelector(".reply-form").classList.add("hidden");
+          // Refresh the whole thread to see the new reply
+          await renderThread(postId, wrap.closest(".thread"));
+        } catch (error) {
+          console.error("Reply failed:", error);
+        } finally {
+          button.innerHTML = originalButtonText;
+          button.disabled = false;
+        }
       });
 
-      // children
-      const kids = item.querySelector(".children");
-      (node.replies || []).forEach(child => {
-        kids.appendChild(renderNode(postId, child, depth+1));
+      // Render replies
+      const childrenContainer = item.querySelector(".children");
+      (comment.replies || []).forEach(reply => {
+        childrenContainer.appendChild(renderCommentNode(postId, reply, depth + 1));
       });
 
       return wrap;
     }
 
-    // new post submit
+    // ---------- INITIALIZATION ----------
+    // New post form submission
     document.getElementById("postForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const text = document.getElementById("postText").value.trim();
-      const img = document.getElementById("postImage").files[0];
-      if (!text) return;
+      const textEl = document.getElementById("postText");
+      const imgEl = document.getElementById("postImage");
+      const button = document.getElementById("postSubmitButton");
+      
+      if (!textEl.value.trim()) return;
 
-      const fd = new FormData();
-      fd.append("content", text);
-      if (img) fd.append("image", img);
+      const originalButtonText = button.innerHTML;
+      button.innerHTML = `<div class="loader-small"></div>`;
+      button.disabled = true;
 
-      await createPost(fd);
-      document.getElementById("postText").value = "";
-      document.getElementById("postImage").value = "";
-      loadPosts();
+      try {
+        const fd = new FormData();
+        fd.append("content", textEl.value);
+        if (imgEl.files.length) fd.append("image", imgEl.files[0]);
+        await createPost(fd);
+        textEl.value = "";
+        imgEl.value = "";
+        await loadPosts();
+      } catch (error) {
+        console.error("Post creation failed:", error);
+        alert("Could not create post. Please try again.");
+      } finally {
+        button.innerHTML = originalButtonText;
+        button.disabled = false;
+      }
     });
 
+    // Initial load
     loadPosts();
   </script>
 </body>
