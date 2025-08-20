@@ -13,6 +13,7 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
+            overflow: hidden;
         }
         .app-header {
             background-color: rgba(255, 255, 255, 0.8);
@@ -38,6 +39,21 @@
         #chat-messages {
             scroll-behavior: smooth;
         }
+        .message-container {
+            display: flex;
+            flex-direction: column;
+        }
+        .message-container.sent {
+            align-items: flex-end;
+        }
+        .message-container.received {
+            align-items: flex-start;
+        }
+        .message-info {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin: 0 8px 2px;
+        }
         .loader {
           width: 24px;
           height: 24px;
@@ -51,9 +67,23 @@
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
+        #username-modal {
+            background-color: rgba(0,0,0,0.4);
+        }
     </style>
 </head>
 <body>
+
+    <!-- Username Modal -->
+    <div id="username-modal" class="fixed inset-0 z-50 flex items-center justify-center">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-11/12 max-w-sm">
+            <h2 class="text-xl font-bold mb-4">Enter Your Name</h2>
+            <form id="username-form">
+                <input id="username-input" type="text" placeholder="Your name..." class="w-full p-2 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded-lg font-semibold">Join Chat</button>
+            </form>
+        </div>
+    </div>
 
     <header class="app-header text-center p-3 flex items-center justify-between sticky top-0">
         <a href="/" class="text-blue-600 text-lg">&larr; Back</a>
@@ -76,83 +106,138 @@
     </footer>
 
     <script>
-        const form = document.getElementById('chat-form');
-        const input = document.getElementById('chat-input');
-        const submitButton = document.getElementById('chat-submit');
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const chatSubmit = document.getElementById('chat-submit');
         const messages = document.getElementById('chat-messages');
         const historyLoader = document.getElementById('history-loader');
+        const usernameModal = document.getElementById('username-modal');
+        const usernameForm = document.getElementById('username-form');
+        const usernameInput = document.getElementById('username-input');
 
-        // Function to authenticate with our backend and get an Ably token
-        async function getAblyToken() {
-            const response = await fetch('/api/ably-auth');
-            if (!response.ok) {
-                throw new Error('Failed to get Ably token');
+        let username = '';
+
+        // --- Cookie Helpers ---
+        function setCookie(name, value, days) {
+            let expires = "";
+            if (days) {
+                const date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                expires = "; expires=" + date.toUTCString();
             }
-            return response.json();
+            document.cookie = name + "=" + (value || "") + expires + "; path=/";
         }
+        function getCookie(name) {
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
+            }
+            return null;
+        }
+
+        // --- Main Logic ---
+        function checkUsername() {
+            const savedUsername = getCookie('chatUsername');
+            if (savedUsername) {
+                username = savedUsername;
+                usernameModal.style.display = 'none';
+                initializeAbly();
+            } else {
+                usernameModal.style.display = 'flex';
+            }
+        }
+
+        usernameForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = usernameInput.value.trim();
+            if (name) {
+                username = name;
+                setCookie('chatUsername', name, 365);
+                usernameModal.style.display = 'none';
+                initializeAbly();
+            }
+        });
 
         async function initializeAbly() {
             try {
                 const ably = new Ably.Realtime({
-                    authUrl: '/api/ably-auth',
+                    authUrl: `/api/ably-auth?clientId=${encodeURIComponent(username)}`,
                     authMethod: 'GET'
                 });
 
                 ably.connection.on('connected', () => {
-                    input.disabled = false;
-                    submitButton.disabled = false;
+                    chatInput.disabled = false;
+                    chatSubmit.disabled = false;
                 });
 
                 const channel = ably.channels.get('live-chat');
 
-                // ** NEW: Fetch message history **
-                channel.history({ limit: 25 }, (err, resultPage) => {
+                channel.history({ limit: 50 }, (err, resultPage) => {
+                    historyLoader.style.display = 'none';
                     if (err) {
                         console.error("Error fetching history:", err);
                         return;
                     }
                     
-                    // Clear the loader and add messages
-                    historyLoader.style.display = 'none';
-                    resultPage.items.forEach(message => {
-                        // All historical messages will appear as 'received'
-                        addMessage(message.data.text, 'received');
+                    // ** FIX: Reverse the history array to show oldest messages first **
+                    const historyMessages = resultPage.items.reverse();
+
+                    historyMessages.forEach(message => {
+                        const isSentByMe = message.clientId === username;
+                        addMessage(message.data, message.timestamp, isSentByMe ? 'sent' : 'received');
                     });
                     
-                    // ** THEN, subscribe to new messages **
                     channel.subscribe('message', (message) => {
-                        const isSentByMe = message.clientId === ably.auth.clientId;
-                        addMessage(message.data.text, isSentByMe ? 'sent' : 'received');
+                        const isSentByMe = message.clientId === username;
+                        addMessage(message.data, message.timestamp, isSentByMe ? 'sent' : 'received');
                     });
                 });
 
-
-                // Handle form submission
-                form.addEventListener('submit', (e) => {
+                chatForm.addEventListener('submit', (e) => {
                     e.preventDefault();
-                    const text = input.value.trim();
+                    const text = chatInput.value.trim();
                     if (text && ably.connection.state === 'connected') {
-                        channel.publish('message', { text: text });
-                        input.value = '';
+                        channel.publish('message', { text: text, name: username });
+                        chatInput.value = '';
                     }
                 });
 
             } catch (error) {
                 console.error("Ably initialization failed:", error);
-                addMessage("Could not connect to chat. Please try again later.", "received");
+                addMessage({ text: "Could not connect to chat.", name: "System" }, Date.now(), "received");
                 historyLoader.style.display = 'none';
             }
         }
 
-        function addMessage(text, type) {
+        function addMessage(data, timestamp, type) {
+            const container = document.createElement('div');
+            container.className = `message-container ${type}`;
+
+            const time = new Date(timestamp);
+            const formattedTime = time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+            const info = document.createElement('div');
+            info.className = 'message-info';
+            info.textContent = type === 'received' ? `${data.name} · ${formattedTime}` : formattedTime;
+
             const bubble = document.createElement('div');
             bubble.className = `chat-bubble ${type}`;
-            bubble.textContent = text;
-            messages.appendChild(bubble);
-            messages.scrollTop = messages.scrollHeight; // Auto-scroll to bottom
+            bubble.textContent = data.text;
+
+            container.appendChild(info);
+            container.appendChild(bubble);
+            messages.appendChild(container);
+            
+            setTimeout(() => {
+                messages.scrollTop = messages.scrollHeight;
+            }, 0);
         }
 
-        initializeAbly();
+        // Start the app
+        checkUsername();
     </script>
 
 </body>
