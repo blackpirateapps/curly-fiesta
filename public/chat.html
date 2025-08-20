@@ -247,7 +247,7 @@
             } catch (error) {
                 console.error("Ably initialization failed:", error);
                 addMessage({ type: 'text', text: "Could not connect to chat.", name: "System" }, Date.now(), "received");
-                messages.innerHTML = ''; // Clear loader
+                messages.innerHTML = '';
             }
         }
 
@@ -285,7 +285,7 @@
             try {
                 const res = await fetch('/api/stickers');
                 const stickers = await res.json();
-                stickerGrid.innerHTML = ''; // Clear old stickers
+                stickerGrid.innerHTML = '';
                 stickers.forEach(sticker => {
                     const img = document.createElement('img');
                     img.src = sticker.url;
@@ -357,10 +357,12 @@
         
         emojiPicker.addEventListener('emoji-click', event => { chatInput.value += event.detail.unicode; });
         
-        openUploadModalBtn.addEventListener('click', () => stickerUploadModal.classList.remove('hidden'));
+        openUploadModalBtn.addEventListener('click', () => {
+            stickerUploadModal.classList.remove('hidden');
+            stickerPanel.classList.add('hidden');
+        });
         closeUploadModalBtn.addEventListener('click', () => stickerUploadModal.classList.add('hidden'));
 
-        // Global click to hide panels
         document.addEventListener('click', (event) => {
             const isClickInsideFooter = event.target.closest('footer');
             if (!isClickInsideFooter) {
