@@ -6,7 +6,6 @@
     <title>Live Chat - Curly Fiesta</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-    <!-- Import the emoji picker library -->
     <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
     <style>
         body {
@@ -28,68 +27,76 @@
             border-radius: 18px;
             word-wrap: break-word;
         }
-        .chat-bubble.sent {
-            background-color: #007aff;
-            color: white;
-            align-self: flex-end;
+        .chat-bubble.sent { background-color: #007aff; color: white; align-self: flex-end; }
+        .chat-bubble.received { background-color: #e5e5ea; color: black; align-self: flex-start; }
+        #chat-messages { scroll-behavior: smooth; }
+        .message-container { display: flex; flex-direction: column; }
+        .message-container.sent { align-items: flex-end; }
+        .message-container.received { align-items: flex-start; }
+        .message-info { font-size: 0.75rem; color: #6b7280; margin: 0 8px 2px; }
+        .loader { width: 24px; height: 24px; border: 3px solid #f3f3f3; border-top: 3px solid #007aff; border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .modal-backdrop { background-color: rgba(0,0,0,0.4); }
+        
+        /* Sticker & Emoji Panel Styles */
+        .panel {
+            position: absolute;
+            bottom: 65px;
+            right: 10px;
+            z-index: 100;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border: 1px solid #e5e5e5;
         }
-        .chat-bubble.received {
-            background-color: #e5e5ea;
-            color: black;
-            align-self: flex-start;
-        }
-        #chat-messages {
-            scroll-behavior: smooth;
-        }
-        .message-container {
+        #sticker-panel {
+            width: 300px;
+            height: 250px;
             display: flex;
             flex-direction: column;
         }
-        .message-container.sent {
-            align-items: flex-end;
+        #sticker-grid {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 8px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+            gap: 8px;
         }
-        .message-container.received {
-            align-items: flex-start;
+        .sticker-item {
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
         }
-        .message-info {
-            font-size: 0.75rem;
-            color: #6b7280;
-            margin: 0 8px 2px;
-        }
-        .loader {
-          width: 24px;
-          height: 24px;
-          border: 3px solid #f3f3f3;
-          border-top: 3px solid #007aff;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-          margin: 20px auto;
-        }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        #username-modal {
-            background-color: rgba(0,0,0,0.4);
-        }
-        /* Emoji Picker Styles */
-        #emoji-picker {
-            position: absolute;
-            bottom: 65px; /* Position above the input bar */
-            right: 10px;
-            z-index: 100;
-        }
+        .sticker-item:hover { background-color: #f0f2f5; }
     </style>
 </head>
 <body>
 
     <!-- Username Modal -->
-    <div id="username-modal" class="fixed inset-0 z-50 flex items-center justify-center">
+    <div id="username-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
         <div class="bg-white p-6 rounded-lg shadow-xl w-11/12 max-w-sm">
             <h2 class="text-xl font-bold mb-4">Enter Your Name</h2>
             <form id="username-form">
                 <input id="username-input" type="text" placeholder="Your name..." class="w-full p-2 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                 <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded-lg font-semibold">Join Chat</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sticker Upload Modal -->
+    <div id="sticker-upload-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
+         <div class="bg-white p-6 rounded-lg shadow-xl w-11/12 max-w-sm">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Upload Sticker</h2>
+                <button id="close-upload-modal" class="text-gray-500">&times;</button>
+            </div>
+            <form id="sticker-upload-form">
+                <p class="text-sm text-gray-600 mb-2">Select a PNG or GIF file (max 500kb).</p>
+                <input id="sticker-file-input" type="file" accept="image/png, image/gif" class="w-full p-2 border rounded-lg mb-4" required>
+                <div id="upload-error" class="text-red-500 text-sm mb-2"></div>
+                <button type="submit" id="upload-submit-btn" class="w-full bg-blue-600 text-white p-2 rounded-lg font-semibold">Upload</button>
             </form>
         </div>
     </div>
@@ -102,12 +109,13 @@
 
     <main id="chat-messages" class="flex-1 p-4 overflow-y-auto flex flex-col gap-3">
         <div id="history-loader" class="loader"></div>
-        <!-- Messages will be injected here -->
     </main>
 
     <footer class="p-3 bg-white border-t border-gray-200 sticky bottom-0 relative">
         <form id="chat-form" class="flex gap-2 items-center">
-            <!-- Emoji Picker Button -->
+            <button id="sticker-btn" type="button" class="text-gray-500 p-2 rounded-full hover:bg-gray-200">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </button>
             <button id="emoji-btn" type="button" class="text-gray-500 p-2 rounded-full hover:bg-gray-200">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
             </button>
@@ -116,11 +124,21 @@
                 &uarr;
             </button>
         </form>
-        <!-- Emoji Picker Element -->
-        <emoji-picker id="emoji-picker" class="light hidden"></emoji-picker>
+        
+        <emoji-picker id="emoji-picker" class="light hidden panel"></emoji-picker>
+        
+        <div id="sticker-panel" class="hidden panel">
+            <div id="sticker-grid">
+                <!-- Stickers will be loaded here -->
+            </div>
+            <div class="p-2 border-t">
+                <button id="open-upload-modal" class="w-full bg-gray-200 text-gray-800 p-2 rounded-lg font-semibold text-sm">Upload Sticker</button>
+            </div>
+        </div>
     </footer>
 
     <script>
+        // DOM Elements
         const chatForm = document.getElementById('chat-form');
         const chatInput = document.getElementById('chat-input');
         const chatSubmit = document.getElementById('chat-submit');
@@ -131,8 +149,19 @@
         const usernameInput = document.getElementById('username-input');
         const emojiBtn = document.getElementById('emoji-btn');
         const emojiPicker = document.getElementById('emoji-picker');
+        const stickerBtn = document.getElementById('sticker-btn');
+        const stickerPanel = document.getElementById('sticker-panel');
+        const stickerGrid = document.getElementById('sticker-grid');
+        const openUploadModalBtn = document.getElementById('open-upload-modal');
+        const stickerUploadModal = document.getElementById('sticker-upload-modal');
+        const closeUploadModalBtn = document.getElementById('close-upload-modal');
+        const stickerUploadForm = document.getElementById('sticker-upload-form');
+        const stickerFileInput = document.getElementById('sticker-file-input');
+        const uploadError = document.getElementById('upload-error');
+        const uploadSubmitBtn = document.getElementById('upload-submit-btn');
 
         let username = '';
+        let ably, channel;
 
         // --- Cookie Helpers ---
         function setCookie(name, value, days) {
@@ -180,7 +209,7 @@
 
         async function initializeAbly() {
             try {
-                const ably = new Ably.Realtime({
+                ably = new Ably.Realtime({
                     authUrl: `/api/ably-auth?clientId=${encodeURIComponent(username)}`,
                     authMethod: 'GET'
                 });
@@ -190,17 +219,13 @@
                     chatSubmit.disabled = false;
                 });
 
-                const channel = ably.channels.get('live-chat');
+                channel = ably.channels.get('live-chat');
 
                 channel.history({ limit: 50 }, (err, resultPage) => {
                     historyLoader.style.display = 'none';
-                    if (err) {
-                        console.error("Error fetching history:", err);
-                        return;
-                    }
+                    if (err) { console.error("Error fetching history:", err); return; }
                     
                     const historyMessages = resultPage.items.reverse();
-
                     historyMessages.forEach(message => {
                         const isSentByMe = message.clientId === username;
                         addMessage(message.data, message.timestamp, isSentByMe ? 'sent' : 'received');
@@ -216,14 +241,16 @@
                     e.preventDefault();
                     const text = chatInput.value.trim();
                     if (text && ably.connection.state === 'connected') {
-                        channel.publish('message', { text: text, name: username });
+                        channel.publish('message', { type: 'text', text: text, name: username });
                         chatInput.value = '';
                     }
                 });
 
+                fetchAndRenderStickers();
+
             } catch (error) {
                 console.error("Ably initialization failed:", error);
-                addMessage({ text: "Could not connect to chat.", name: "System" }, Date.now(), "received");
+                addMessage({ type: 'text', text: "Could not connect to chat.", name: "System" }, Date.now(), "received");
                 historyLoader.style.display = 'none';
             }
         }
@@ -241,35 +268,107 @@
 
             const bubble = document.createElement('div');
             bubble.className = `chat-bubble ${type}`;
-            bubble.textContent = data.text;
+
+            if (data.type === 'sticker') {
+                bubble.innerHTML = `<img src="${data.url}" alt="sticker" class="max-w-xs max-h-32" />`;
+                bubble.style.backgroundColor = 'transparent';
+                bubble.style.padding = '0';
+            } else {
+                bubble.textContent = data.text;
+            }
 
             container.appendChild(info);
             container.appendChild(bubble);
             messages.appendChild(container);
             
-            setTimeout(() => {
-                messages.scrollTop = messages.scrollHeight;
-            }, 0);
+            setTimeout(() => { messages.scrollTop = messages.scrollHeight; }, 0);
         }
 
-        // --- Emoji Picker Logic ---
-        emojiBtn.addEventListener('click', () => {
-            emojiPicker.classList.toggle('hidden');
-        });
+        // --- Sticker Logic ---
+        async function fetchAndRenderStickers() {
+            try {
+                const res = await fetch('/api/stickers');
+                const stickers = await res.json();
+                stickerGrid.innerHTML = ''; // Clear old stickers
+                stickers.forEach(sticker => {
+                    const img = document.createElement('img');
+                    img.src = sticker.url;
+                    img.className = 'sticker-item w-full h-full object-contain';
+                    img.onclick = () => sendSticker(sticker.url);
+                    stickerGrid.appendChild(img);
+                });
+            } catch (error) {
+                console.error('Failed to fetch stickers:', error);
+            }
+        }
 
-        emojiPicker.addEventListener('emoji-click', event => {
-            chatInput.value += event.detail.unicode;
-        });
+        function sendSticker(url) {
+            if (ably && channel && ably.connection.state === 'connected') {
+                channel.publish('message', { type: 'sticker', url: url, name: username });
+                stickerPanel.classList.add('hidden');
+            }
+        }
 
-        // Hide picker when clicking outside
-        document.addEventListener('click', (event) => {
-            if (!emojiPicker.contains(event.target) && !emojiBtn.contains(event.target)) {
-                emojiPicker.classList.add('hidden');
+        stickerUploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const file = stickerFileInput.files[0];
+            uploadError.textContent = '';
+
+            if (!file) {
+                uploadError.textContent = 'Please select a file.';
+                return;
+            }
+            if (file.size > 500 * 1024) {
+                uploadError.textContent = 'File is too large (max 500kb).';
+                return;
+            }
+
+            uploadSubmitBtn.disabled = true;
+            uploadSubmitBtn.textContent = 'Uploading...';
+
+            const formData = new FormData();
+            formData.append('sticker', file);
+
+            try {
+                const res = await fetch('/api/stickers', { method: 'POST', body: formData });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error);
+                
+                // Success
+                stickerUploadModal.classList.add('hidden');
+                fetchAndRenderStickers(); // Refresh sticker list
+            } catch (error) {
+                uploadError.textContent = error.message;
+            } finally {
+                uploadSubmitBtn.disabled = false;
+                uploadSubmitBtn.textContent = 'Upload';
+                stickerUploadForm.reset();
             }
         });
 
+        // --- UI Event Listeners ---
+        function togglePanel(panel) {
+            const allPanels = [emojiPicker, stickerPanel];
+            allPanels.forEach(p => {
+                if (p !== panel) p.classList.add('hidden');
+            });
+            panel.classList.toggle('hidden');
+        }
+        emojiBtn.addEventListener('click', () => togglePanel(emojiPicker));
+        stickerBtn.addEventListener('click', () => togglePanel(stickerPanel));
+        emojiPicker.addEventListener('emoji-click', event => { chatInput.value += event.detail.unicode; });
+        
+        openUploadModalBtn.addEventListener('click', () => stickerUploadModal.classList.remove('hidden'));
+        closeUploadModalBtn.addEventListener('click', () => stickerUploadModal.classList.add('hidden'));
 
-        // Start the app
+        document.addEventListener('click', (event) => {
+            const isOutside = ![emojiPicker, stickerPanel, emojiBtn, stickerBtn].some(el => el.contains(event.target));
+            if (isOutside) {
+                emojiPicker.classList.add('hidden');
+                stickerPanel.classList.add('hidden');
+            }
+        });
+
         checkUsername();
     </script>
 
