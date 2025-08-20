@@ -51,11 +51,13 @@ export default async function handler(req, res) {
       }
       
       // Server-side validation for file type and size
-      if (!['image/png', 'image/gif'].includes(file.mimeType)) {
-          return res.status(400).json({ error: "Invalid file type. Only PNG and GIF are allowed." });
+      const allowedMimeTypes = ['image/png', 'image/gif', 'image/webp'];
+      if (!allowedMimeTypes.includes(file.mimeType)) {
+          return res.status(400).json({ error: "Invalid file type. Only PNG, GIF, and WebP are allowed." });
       }
-      if (file.buffer.length > 500 * 1024) { // 500kb limit
-          return res.status(400).json({ error: "File is too large. Max size is 500kb." });
+      // UPDATED: Increased file size limit to 2MB
+      if (file.buffer.length > 2 * 1024 * 1024) { 
+          return res.status(400).json({ error: "File is too large. Max size is 2MB." });
       }
 
       // Upload the file to Vercel Blob
