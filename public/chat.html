@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Live Chat - Curly Fiesta</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .app-header {
+            background-color: rgba(255, 255, 255, 0.8);
+            border-bottom: 1px solid #d1d1d6;
+            backdrop-filter: blur(10px);
+        }
+        .chat-bubble {
+            max-width: 75%;
+            padding: 8px 12px;
+            border-radius: 18px;
+        }
+        .chat-bubble.sent {
+            background-color: #007aff;
+            color: white;
+            align-self: flex-end;
+        }
+        .chat-bubble.received {
+            background-color: #e5e5ea;
+            color: black;
+            align-self: flex-start;
+        }
+        #chat-messages {
+            scroll-behavior: smooth;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="app-header text-center p-3 flex items-center justify-between sticky top-0">
+        <a href="/" class="text-blue-600 text-lg">&larr; Back</a>
+        <h1 class="text-xl font-bold">Live Chat</h1>
+        <div></div>
+    </header>
+
+    <main id="chat-messages" class="flex-1 p-4 overflow-y-auto flex flex-col gap-3">
+        <!-- Messages will be injected here -->
+    </main>
+
+    <footer class="p-3 bg-white border-t border-gray-200 sticky bottom-0">
+        <form id="chat-form" class="flex gap-2">
+            <input id="chat-input" type="text" placeholder="Type a message..." class="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button type="submit" class="bg-blue-600 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center">
+                &uarr;
+            </button>
+        </form>
+    </footer>
+
+    <script>
+        const form = document.getElementById('chat-form');
+        const input = document.getElementById('chat-input');
+        const messages = document.getElementById('chat-messages');
+
+        // Function to authenticate with our backend and get an Ably token
+        async function getAblyToken() {
+            const response = await fetch('/api/ably-auth');
+            return response.json();
+        }
+
+        async function initializeAbly() {
+            const tokenRequest = await getAblyToken();
+            
+            const ably = new Ably.Realtime({
+                authCallback: (params, callback) => {
+                    // This function will be called by Ably when it needs a new token
+                    getAblyToken().then(token => callback(null, token));
+                }
+            });
+
+            const channel = ably.channels.get('live-chat');
+
+            // Subscribe to messages
+            channel.subscribe('message', (message) => {
+                const isSentByMe = message.clientId === ably.auth.clientId;
+                addMessage(message.data.text, isSentByMe ? 'sent' : 'received');
+            });
+
+            // Handle form submission
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const text = input.value.trim();
+                if (text) {
+                    channel.publish('message', { text: text });
+                    input.value = '';
+                }
+            });
+        }
+
+        function addMessage(text, type) {
+            const bubble = document.createElement('div');
+            bubble.className = `chat-bubble ${type}`;
+            bubble.textContent = text;
+            messages.appendChild(bubble);
+            messages.scrollTop = messages.scrollHeight; // Auto-scroll to bottom
+        }
+
+        initializeAbly();
+    </script>
+
+</body>
+</html>

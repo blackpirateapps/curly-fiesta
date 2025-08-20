@@ -9,6 +9,7 @@
   "dependencies": {
     "@libsql/client": "latest",
     "@vercel/blob": "latest",
-    "busboy": "latest"
+    "busboy": "latest",
+    "ably": "latest"
   }
 }
