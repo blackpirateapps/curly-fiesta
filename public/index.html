@@ -2,74 +2,84 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Tiny Social</title>
-  <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css">
-  <link rel="stylesheet" href="style.css">
+  <title>Mini Social</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <header><h1>Tiny Social</h1></header>
+<body class="bg-gray-100 text-gray-900 flex flex-col min-h-screen">
+  <!-- Header -->
+  <header class="bg-white shadow-md p-4">
+    <div class="max-w-2xl mx-auto">
+      <h1 class="text-2xl font-bold">Mini Social</h1>
+    </div>
+  </header>
 
-  <main>
-    <section>
-   <form id="postForm" enctype="multipart/form-data">
-  <textarea name="content" placeholder="What's on your mind?" required></textarea>
-  <input type="file" name="image" accept="image/*">
-  <button type="submit">Post</button>
-</form>
+  <!-- Main -->
+  <main class="flex-grow max-w-2xl mx-auto p-4 space-y-6">
+    <!-- Post Form -->
+    <section class="bg-white p-4 rounded-lg shadow">
+      <form id="postForm" enctype="multipart/form-data" class="space-y-3">
+        <textarea id="content" name="content" required
+          class="w-full p-2 border rounded-md resize-none"
+          placeholder="What's on your mind?"></textarea>
+
+        <input type="file" id="image" name="image" accept="image/*"
+          class="w-full text-sm text-gray-600 border rounded-md cursor-pointer">
+
+        <button type="submit"
+          class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 w-full">
+          Post
+        </button>
+      </form>
     </section>
 
-    <section id="posts"></section>
+    <!-- Recent Posts -->
+    <section>
+      <h2 class="text-xl font-semibold mb-3">Recent Posts</h2>
+      <div id="posts" class="space-y-4"></div>
+    </section>
   </main>
 
-  <footer><small>Made with Vercel + Turso</small></footer>
+  <!-- Footer -->
+  <footer class="bg-white shadow-inner p-4 mt-6">
+    <div class="max-w-2xl mx-auto text-center text-sm text-gray-500">
+      © 2025 Mini Social
+    </div>
+  </footer>
 
+  <!-- JS -->
   <script>
     async function loadPosts() {
-  const res = await fetch("/api/getPosts");
-  const posts = await res.json();
-  const container = document.getElementById("posts");
-  container.innerHTML = "";
-  posts.forEach(post => {
-    const div = document.createElement("article");
-    div.innerHTML = `
-      <p>${post.content}</p>
-      ${post.image_url ? `<img src="${post.image_url}" style="max-width:100%; border-radius:8px; margin-top:0.5rem;">` : ""}
-      <button onclick="likePost(${post.id})">❤️ ${post.likes}</button>
-      <form onsubmit="return commentPost(event, ${post.id})">
-        <input type="text" placeholder="Comment..." required>
-        <button>Reply</button>
-      </form>
-    `;
-    container.appendChild(div);
-  });
-}
+      const res = await fetch('/api/getPosts');
+      const posts = await res.json();
 
-    async function likePost(id) {
-      await fetch("/api/like", { method: "POST", body: JSON.stringify({ id }) });
-      loadPosts();
+      const postsDiv = document.getElementById('posts');
+      postsDiv.innerHTML = '';
+
+      posts.forEach(post => {
+        const article = document.createElement('article');
+        article.className = "bg-white p-4 rounded-lg shadow";
+
+        article.innerHTML = `
+          <p class="mb-2">${post.content}</p>
+          ${post.image_url ? `<img src="${post.image_url}" alt="Post image" class="w-full rounded-lg mb-2">` : ""}
+          <div class="text-sm text-gray-500">Likes: ${post.likes}</div>
+        `;
+
+        postsDiv.appendChild(article);
+      });
     }
 
-    async function commentPost(e, id) {
+    document.getElementById('postForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const input = e.target.querySelector("input");
-      await fetch("/api/comment", { method: "POST", body: JSON.stringify({ postId: id, text: input.value }) });
-      input.value = "";
-      return false;
-    }
+      const formData = new FormData(e.target);
+      await fetch('/api/createPost', {
+        method: 'POST',
+        body: formData
+      });
+      e.target.reset();
+      loadPosts();
+    });
 
-    document.getElementById("postForm").onsubmit = async e => {
-  e.preventDefault();
-
-  const formData = new FormData(e.target);
-
-  await fetch("/api/createPost", {
-    method: "POST",
-    body: formData
-  });
-
-  e.target.reset();
-  loadPosts();
-};
     loadPosts();
   </script>
 </body>
