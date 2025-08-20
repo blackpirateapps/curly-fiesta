@@ -9,35 +9,50 @@
     <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f0f2f5;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f7f7f8;
             display: flex;
             flex-direction: column;
             height: 100vh;
             overflow: hidden;
         }
         .app-header {
-            background-color: rgba(255, 255, 255, 0.8);
-            border-bottom: 1px solid #d1d1d6;
-            backdrop-filter: blur(10px);
+            background-color: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
         }
-        .chat-bubble {
-            max-width: 75%;
-            padding: 8px 12px;
-            border-radius: 18px;
+        .chat-message {
+            display: flex;
+            padding: 8px 0;
+        }
+        .message-content {
+            display: flex;
+            flex-direction: column;
+        }
+        .message-header {
+            display: flex;
+            align-items: baseline;
+            margin-bottom: 4px;
+        }
+        .message-sender {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-right: 8px;
+        }
+        .message-time {
+            font-size: 0.75rem;
+            color: #6b7280;
+        }
+        .message-text {
             word-wrap: break-word;
+            line-height: 1.5;
         }
-        /* REMOVED conflicting align-self rules */
-        .chat-bubble.sent { background-color: #007aff; color: white; }
-        .chat-bubble.received { background-color: #e5e5ea; color: black; }
-        #chat-messages { scroll-behavior: smooth; }
-        .message-container { display: flex; flex-direction: column; }
-        .message-container.sent { align-items: flex-end; }
-        .message-container.received { align-items: flex-start; }
-        .message-info { font-size: 0.75rem; color: #6b7280; margin: 0 8px 2px; }
-        .loader { width: 24px; height: 24px; border: 3px solid #f3f3f3; border-top: 3px solid #007aff; border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto; }
+        .message-sticker {
+            max-width: 128px;
+            max-height: 128px;
+        }
+        .loader { width: 24px; height: 24px; border: 3px solid #e5e7eb; border-top: 3px solid #4f46e5; border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .modal-backdrop { background-color: rgba(0,0,0,0.4); }
+        .modal-backdrop { background-color: rgba(0,0,0,0.5); }
         
         /* Panel Styles */
         .panel {
@@ -49,7 +64,7 @@
             background: white;
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            border: 1px solid #e5e5e5;
+            border: 1px solid #e5e7eb;
             width: 320px;
             height: 300px;
         }
@@ -68,7 +83,7 @@
             border-radius: 4px;
             transition: background-color 0.2s;
         }
-        .sticker-item:hover { background-color: #e5e5e5; }
+        .sticker-item:hover { background-color: #f3f4f6; }
     </style>
 </head>
 <body>
@@ -76,10 +91,10 @@
     <!-- Username Modal -->
     <div id="username-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
         <div class="bg-white p-6 rounded-lg shadow-xl w-11/12 max-w-sm">
-            <h2 class="text-xl font-bold mb-4">Enter Your Name</h2>
+            <h2 class="text-xl font-bold mb-4">Choose a Name</h2>
             <form id="username-form">
-                <input id="username-input" type="text" placeholder="Your name..." class="w-full p-2 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded-lg font-semibold">Join Chat</button>
+                <input id="username-input" type="text" placeholder="Your name..." class="w-full p-2 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                <button type="submit" class="w-full bg-indigo-600 text-white p-2 rounded-lg font-semibold hover:bg-indigo-700">Join Chat</button>
             </form>
         </div>
     </div>
@@ -95,39 +110,39 @@
                 <p class="text-sm text-gray-600 mb-2">Select a PNG or GIF file (max 500kb).</p>
                 <input id="sticker-file-input" type="file" accept="image/png, image/gif" class="w-full p-2 border rounded-lg mb-4" required>
                 <div id="upload-error" class="text-red-500 text-sm mb-2"></div>
-                <button type="submit" id="upload-submit-btn" class="w-full bg-blue-600 text-white p-2 rounded-lg font-semibold">Upload</button>
+                <button type="submit" id="upload-submit-btn" class="w-full bg-indigo-600 text-white p-2 rounded-lg font-semibold hover:bg-indigo-700">Upload</button>
             </form>
         </div>
     </div>
 
     <header class="app-header text-center p-3 flex items-center justify-between sticky top-0">
-        <a href="/" class="text-blue-600 text-lg">&larr; Back</a>
-        <h1 class="text-xl font-bold">Live Chat</h1>
+        <a href="/" class="text-indigo-600 font-semibold">&larr; Home</a>
+        <h1 class="text-xl font-bold">Campus Chat</h1>
         <div></div>
     </header>
 
-    <main id="chat-messages" class="flex-1 p-4 overflow-y-auto flex flex-col gap-3"></main>
+    <main id="chat-messages" class="flex-1 p-4 overflow-y-auto"></main>
 
     <footer class="bg-white border-t border-gray-200 p-3 relative">
         <form id="chat-form" class="flex gap-2 items-center">
+            <input id="chat-input" type="text" placeholder="Connecting..." class="flex-1 bg-gray-100 p-2 px-4 border-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500" disabled>
             <button id="emoji-btn" type="button" class="text-gray-500 p-2 rounded-full hover:bg-gray-200">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
             </button>
             <button id="sticker-btn" type="button" class="text-gray-500 p-2 rounded-full hover:bg-gray-200">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </button>
-            <input id="chat-input" type="text" placeholder="Connecting to chat..." class="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500" disabled>
-            <button id="chat-submit" type="submit" class="bg-blue-600 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center" disabled>
-                &uarr;
+            <button id="chat-submit" type="submit" class="bg-indigo-600 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center hover:bg-indigo-700" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
             </button>
         </form>
         
         <emoji-picker id="emoji-picker" class="light hidden panel"></emoji-picker>
         
         <div id="sticker-panel" class="hidden panel">
-            <div id="sticker-grid" class="flex-grow"></div>
+            <div id="sticker-grid"></div>
             <div class="p-2 border-t">
-                <button id="open-upload-modal" class="w-full bg-gray-200 text-gray-800 p-2 rounded-lg font-semibold text-sm">Upload Sticker</button>
+                <button id="open-upload-modal" class="w-full bg-gray-100 text-gray-800 p-2 rounded-lg font-semibold text-sm hover:bg-gray-200">Upload Sticker</button>
             </div>
         </div>
     </footer>
@@ -226,13 +241,11 @@
                     
                     const historyMessages = resultPage.items.reverse();
                     historyMessages.forEach(message => {
-                        const isSentByMe = message.clientId === username;
-                        addMessage(message.data, message.timestamp, isSentByMe ? 'sent' : 'received');
+                        addMessage(message.data, message.timestamp);
                     });
                     
                     channel.subscribe('message', (message) => {
-                        const isSentByMe = message.clientId === username;
-                        addMessage(message.data, message.timestamp, isSentByMe ? 'sent' : 'received');
+                        addMessage(message.data, message.timestamp);
                     });
                 });
 
@@ -254,34 +267,32 @@
             }
         }
 
-        function addMessage(data, timestamp, type) {
-            const container = document.createElement('div');
-            container.className = `message-container ${type}`;
+        function addMessage(data, timestamp) {
+            const messageElem = document.createElement('div');
+            messageElem.className = 'chat-message';
 
             const time = new Date(timestamp);
             const formattedTime = time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-            const info = document.createElement('div');
-            info.className = 'message-info';
-            info.textContent = type === 'received' ? `${data.name} · ${formattedTime}` : formattedTime;
-
-            const bubble = document.createElement('div');
-            bubble.className = `chat-bubble ${type}`;
-
+            let contentHTML;
             if (data.type === 'sticker') {
-                bubble.innerHTML = `<img src="${data.url}" alt="sticker" class="max-w-xs max-h-32" />`;
-                bubble.style.backgroundColor = 'transparent';
-                bubble.style.padding = '0';
+                contentHTML = `<img src="${data.url}" alt="sticker" class="message-sticker" />`;
             } else {
-                bubble.textContent = data.text;
+                contentHTML = `<div class="message-text">${data.text}</div>`;
             }
 
-            container.appendChild(info);
-            container.appendChild(bubble);
-            messages.appendChild(container);
+            messageElem.innerHTML = `
+                <div class="message-content">
+                    <div class="message-header">
+                        <span class="message-sender">${data.name}</span>
+                        <span class="message-time">${formattedTime}</span>
+                    </div>
+                    ${contentHTML}
+                </div>
+            `;
             
-            // Use scrollIntoView for more reliable scrolling
-            container.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            messages.appendChild(messageElem);
+            messageElem.scrollIntoView({ behavior: 'smooth', block: 'end' });
         }
 
         // --- Sticker Logic ---
@@ -363,12 +374,12 @@
         
         openUploadModalBtn.addEventListener('click', () => {
             stickerUploadModal.classList.remove('hidden');
-            stickerUploadModal.classList.add('flex'); // FIX: ensure flex is applied
+            stickerUploadModal.classList.add('flex');
             stickerPanel.classList.add('hidden');
         });
         closeUploadModalBtn.addEventListener('click', () => {
             stickerUploadModal.classList.add('hidden');
-            stickerUploadModal.classList.remove('flex'); // FIX: remove flex
+            stickerUploadModal.classList.remove('flex');
         });
 
         document.addEventListener('click', (event) => {
