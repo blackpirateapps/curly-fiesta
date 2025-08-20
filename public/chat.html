@@ -27,8 +27,9 @@
             border-radius: 18px;
             word-wrap: break-word;
         }
-        .chat-bubble.sent { background-color: #007aff; color: white; align-self: flex-end; }
-        .chat-bubble.received { background-color: #e5e5ea; color: black; align-self: flex-start; }
+        /* REMOVED conflicting align-self rules */
+        .chat-bubble.sent { background-color: #007aff; color: white; }
+        .chat-bubble.received { background-color: #e5e5ea; color: black; }
         #chat-messages { scroll-behavior: smooth; }
         .message-container { display: flex; flex-direction: column; }
         .message-container.sent { align-items: flex-end; }
@@ -41,7 +42,7 @@
         /* Panel Styles */
         .panel {
             position: absolute;
-            bottom: 100%; /* Position right above the footer */
+            bottom: 100%;
             right: 10px;
             margin-bottom: 8px;
             z-index: 100;
@@ -52,10 +53,7 @@
             width: 320px;
             height: 300px;
         }
-        #sticker-panel {
-            display: flex;
-            flex-direction: column;
-        }
+        #sticker-panel { display: flex; flex-direction: column; }
         #sticker-grid {
             flex-grow: 1;
             overflow-y: auto;
@@ -118,7 +116,7 @@
             <button id="sticker-btn" type="button" class="text-gray-500 p-2 rounded-full hover:bg-gray-200">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </button>
-            <input id="chat-input" type="text" placeholder="Type a message..." class="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500" disabled>
+            <input id="chat-input" type="text" placeholder="Connecting to chat..." class="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500" disabled>
             <button id="chat-submit" type="submit" class="bg-blue-600 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center" disabled>
                 &uarr;
             </button>
@@ -213,6 +211,11 @@
                 ably.connection.on('connected', () => {
                     chatInput.disabled = false;
                     chatSubmit.disabled = false;
+                    chatInput.placeholder = "Type a message...";
+                });
+
+                ably.connection.on('failed', () => {
+                    chatInput.placeholder = "Error connecting to chat...";
                 });
 
                 channel = ably.channels.get('live-chat');
@@ -246,7 +249,7 @@
 
             } catch (error) {
                 console.error("Ably initialization failed:", error);
-                addMessage({ type: 'text', text: "Could not connect to chat.", name: "System" }, Date.now(), "received");
+                chatInput.placeholder = "Error connecting to chat...";
                 messages.innerHTML = '';
             }
         }
@@ -277,7 +280,8 @@
             container.appendChild(bubble);
             messages.appendChild(container);
             
-            setTimeout(() => { messages.scrollTop = messages.scrollHeight; }, 0);
+            // Use scrollIntoView for more reliable scrolling
+            container.scrollIntoView({ behavior: 'smooth', block: 'end' });
         }
 
         // --- Sticker Logic ---
@@ -359,9 +363,13 @@
         
         openUploadModalBtn.addEventListener('click', () => {
             stickerUploadModal.classList.remove('hidden');
+            stickerUploadModal.classList.add('flex'); // FIX: ensure flex is applied
             stickerPanel.classList.add('hidden');
         });
-        closeUploadModalBtn.addEventListener('click', () => stickerUploadModal.classList.add('hidden'));
+        closeUploadModalBtn.addEventListener('click', () => {
+            stickerUploadModal.classList.add('hidden');
+            stickerUploadModal.classList.remove('flex'); // FIX: remove flex
+        });
 
         document.addEventListener('click', (event) => {
             const isClickInsideFooter = event.target.closest('footer');
