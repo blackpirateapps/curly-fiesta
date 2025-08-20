@@ -6,6 +6,8 @@
     <title>Live Chat - Curly Fiesta</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+    <!-- Import the emoji picker library -->
+    <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -70,6 +72,13 @@
         #username-modal {
             background-color: rgba(0,0,0,0.4);
         }
+        /* Emoji Picker Styles */
+        #emoji-picker {
+            position: absolute;
+            bottom: 65px; /* Position above the input bar */
+            right: 10px;
+            z-index: 100;
+        }
     </style>
 </head>
 <body>
@@ -96,13 +105,19 @@
         <!-- Messages will be injected here -->
     </main>
 
-    <footer class="p-3 bg-white border-t border-gray-200 sticky bottom-0">
-        <form id="chat-form" class="flex gap-2">
+    <footer class="p-3 bg-white border-t border-gray-200 sticky bottom-0 relative">
+        <form id="chat-form" class="flex gap-2 items-center">
+            <!-- Emoji Picker Button -->
+            <button id="emoji-btn" type="button" class="text-gray-500 p-2 rounded-full hover:bg-gray-200">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+            </button>
             <input id="chat-input" type="text" placeholder="Type a message..." class="flex-1 p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500" disabled>
             <button id="chat-submit" type="submit" class="bg-blue-600 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center" disabled>
                 &uarr;
             </button>
         </form>
+        <!-- Emoji Picker Element -->
+        <emoji-picker id="emoji-picker" class="light hidden"></emoji-picker>
     </footer>
 
     <script>
@@ -114,6 +129,8 @@
         const usernameModal = document.getElementById('username-modal');
         const usernameForm = document.getElementById('username-form');
         const usernameInput = document.getElementById('username-input');
+        const emojiBtn = document.getElementById('emoji-btn');
+        const emojiPicker = document.getElementById('emoji-picker');
 
         let username = '';
 
@@ -182,7 +199,6 @@
                         return;
                     }
                     
-                    // ** FIX: Reverse the history array to show oldest messages first **
                     const historyMessages = resultPage.items.reverse();
 
                     historyMessages.forEach(message => {
@@ -235,6 +251,23 @@
                 messages.scrollTop = messages.scrollHeight;
             }, 0);
         }
+
+        // --- Emoji Picker Logic ---
+        emojiBtn.addEventListener('click', () => {
+            emojiPicker.classList.toggle('hidden');
+        });
+
+        emojiPicker.addEventListener('emoji-click', event => {
+            chatInput.value += event.detail.unicode;
+        });
+
+        // Hide picker when clicking outside
+        document.addEventListener('click', (event) => {
+            if (!emojiPicker.contains(event.target) && !emojiBtn.contains(event.target)) {
+                emojiPicker.classList.add('hidden');
+            }
+        });
+
 
         // Start the app
         checkUsername();
