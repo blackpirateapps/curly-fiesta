@@ -8,6 +8,20 @@
     <style>
         .modal-backdrop { background-color: rgba(0,0,0,0.5); }
         .tab.active { border-color: #4f46e5; color: #4f46e5; }
+        #sticker-select-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .sticker-select-item {
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .sticker-select-item:hover { background-color: #f3f4f6; }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -37,7 +51,6 @@
                 <nav class="flex space-x-8" aria-label="Tabs">
                     <button class="tab active py-4 px-1 border-b-2 font-medium text-lg" data-tab="posts">Posts & Comments</button>
                     <button class="tab py-4 px-1 border-b-2 font-medium text-lg text-gray-500 hover:text-gray-700" data-tab="stickers">Stickers</button>
-                    <!-- ADDED: Notice Board Tab -->
                     <button class="tab py-4 px-1 border-b-2 font-medium text-lg text-gray-500 hover:text-gray-700" data-tab="notice">Notice Board</button>
                 </nav>
             </div>
@@ -57,10 +70,13 @@
                 </div>
             </div>
 
-            <!-- ADDED: Notice Board Content Panel -->
+            <!-- Notice Board Content Panel -->
             <div id="notice-content-admin" class="hidden">
                 <div class="bg-white p-6 rounded-lg shadow">
-                    <h2 class="text-2xl font-bold mb-4">Edit Notice Board</h2>
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold">Edit Notice Board</h2>
+                        <button id="add-sticker-to-notice-btn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-gray-300">Add Sticker</button>
+                    </div>
                     <textarea id="notice-textarea" class="w-full p-3 border rounded-lg mb-4 h-40" placeholder="Enter the notice content here..."></textarea>
                     <button id="save-notice-btn" class="bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700">Save Notice</button>
                     <p id="notice-save-status" class="text-green-600 text-sm mt-2"></p>
@@ -100,6 +116,19 @@
             </form>
         </div>
     </div>
+    
+    <!-- Sticker Select Modal for Notice Board -->
+    <div id="sticker-select-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-11/12 max-w-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Select a Sticker</h2>
+                <button id="close-sticker-select-modal" class="text-gray-500 text-2xl">&times;</button>
+            </div>
+            <div id="sticker-select-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 max-h-96 overflow-y-auto">
+                <!-- Stickers for selection will be loaded here -->
+            </div>
+        </div>
+    </div>
 
     <script>
         // --- State ---
@@ -132,11 +161,14 @@
         const uploadError = document.getElementById('upload-error');
         const cancelUploadBtn = document.getElementById('cancel-upload-btn');
         const uploadSubmitBtn = document.getElementById('upload-submit-btn');
-        // ADDED: Notice Board elements
         const noticeContentAdmin = document.getElementById('notice-content-admin');
         const noticeTextarea = document.getElementById('notice-textarea');
         const saveNoticeBtn = document.getElementById('save-notice-btn');
         const noticeSaveStatus = document.getElementById('notice-save-status');
+        const addStickerToNoticeBtn = document.getElementById('add-sticker-to-notice-btn');
+        const stickerSelectModal = document.getElementById('sticker-select-modal');
+        const closeStickerSelectModalBtn = document.getElementById('close-sticker-select-modal');
+        const stickerSelectGrid = document.getElementById('sticker-select-grid');
 
         // --- API Helper ---
         async function api(method, action, body = {}) {
@@ -160,7 +192,7 @@
         function render() {
             renderPosts();
             renderStickers();
-            renderNotice(); // ADDED: Call render function for notice
+            renderNotice();
         }
 
         function renderPosts() {
@@ -168,7 +200,6 @@
             ALL_DATA.posts.forEach(post => {
                 const postComments = ALL_DATA.comments.filter(c => c.post_id === post.id);
                 const postPollOptions = ALL_DATA.poll_options.filter(p => p.post_id === post.id);
-
                 const postEl = document.createElement('div');
                 postEl.className = 'bg-white p-4 rounded-lg shadow mb-6';
                 postEl.innerHTML = `
@@ -228,7 +259,6 @@
             });
         }
         
-        // ADDED: Function to render the notice board content
         function renderNotice() {
             noticeTextarea.value = ALL_DATA.notice || '';
         }
@@ -270,14 +300,10 @@
 
         tabs.forEach(tab => {
             tab.addEventListener('click', (e) => {
-                // Hide all content panels
                 postsContent.classList.add('hidden');
                 stickersContent.classList.add('hidden');
-                noticeContentAdmin.classList.add('hidden'); // ADDED: Hide notice panel
-                // Deactivate all tabs
+                noticeContentAdmin.classList.add('hidden');
                 tabs.forEach(t => t.classList.remove('active'));
-                
-                // Activate the clicked tab and show its content
                 const tabName = e.currentTarget.dataset.tab;
                 e.currentTarget.classList.add('active');
                 if (tabName === 'notice') {
@@ -388,14 +414,37 @@
             }
         });
         
-        // ADDED: Event listener for saving the notice
+        // --- Notice Board Logic ---
+        addStickerToNoticeBtn.addEventListener('click', () => {
+            stickerSelectGrid.innerHTML = ''; // Clear previous
+            if (ALL_DATA && ALL_DATA.stickers) {
+                ALL_DATA.stickers.forEach(sticker => {
+                    const img = document.createElement('img');
+                    img.src = sticker.url;
+                    img.className = 'sticker-select-item w-full h-full object-contain';
+                    img.onclick = () => {
+                        noticeTextarea.value += `\n[sticker:${sticker.url}]`;
+                        stickerSelectModal.classList.add('hidden');
+                    };
+                    stickerSelectGrid.appendChild(img);
+                });
+            }
+            stickerSelectModal.classList.remove('hidden');
+            stickerSelectModal.classList.add('flex');
+        });
+
+        closeStickerSelectModalBtn.addEventListener('click', () => {
+            stickerSelectModal.classList.add('hidden');
+            stickerSelectModal.classList.remove('flex');
+        });
+
         saveNoticeBtn.addEventListener('click', async () => {
             const content = noticeTextarea.value;
             noticeSaveStatus.textContent = 'Saving...';
             try {
                 await api('POST', 'update_notice', { content });
                 noticeSaveStatus.textContent = 'Saved successfully!';
-                const data = await api('GET'); // Refresh data
+                const data = await api('GET');
                 ALL_DATA = data;
             } catch (error) {
                 noticeSaveStatus.textContent = `Error: ${error.message}`;
@@ -412,4 +461,4 @@
         }
     </script>
 </body>
-</html>
+</html

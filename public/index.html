@@ -159,6 +159,12 @@
     .poll-container.voted .poll-option {
         cursor: not-allowed;
     }
+    #notice-content img {
+        max-width: 100px;
+        max-height: 100px;
+        display: inline-block;
+        margin: 4px;
+    }
   </style>
 </head>
 <body class="bg-gray-100 text-gray-900">
@@ -184,7 +190,7 @@
     <!-- Notice Board -->
     <div id="notice-board" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-lg shadow-sm mb-6" role="alert">
         <p class="font-bold">Notice Board</p>
-        <p id="notice-content">Loading...</p>
+        <div id="notice-content" class="whitespace-pre-wrap">Loading...</div>
     </div>
 
     <!-- New Post Form -->
@@ -268,7 +274,6 @@
         if (!r.ok) throw new Error(`API call failed: ${url}`);
         return r.json();
     }
-    // UPDATED: Renamed to reflect it gets all homepage data
     const getHomepageData = () => apiCall("/api/getPosts");
     const createPost = (fd) => fetch("/api/createPost", { method: "POST", body: fd });
     const getComments = (postId) => apiCall(`/api/comment?post_id=${encodeURIComponent(postId)}`);
@@ -278,7 +283,6 @@
 
 
     // ---------- RENDER LOGIC ----------
-    // UPDATED: This function now renders the notice as well as the posts
     async function loadHomepage() {
       const mainLoader = document.getElementById("main-loader");
       const postsContainer = document.getElementById("posts");
@@ -290,8 +294,11 @@
       try {
         const { posts, notice } = await getHomepageData();
         
-        // Render Notice
-        noticeContentEl.textContent = notice;
+        // Render Notice with sticker parsing
+        const noticeHTML = (notice || "").replace(/\[sticker:(.*?)\]/g, (match, url) => {
+            return `<img src="${url}" alt="sticker">`;
+        });
+        noticeContentEl.innerHTML = noticeHTML;
 
         // Render Posts
         const likedItems = getLikedItems();
@@ -418,7 +425,6 @@
             addVotedPoll(postId, optionId);
             pollContainer.classList.add('voted');
 
-            // Re-fetch to get the most up-to-date vote counts for rendering results
             const { posts: allPosts } = await getHomepageData();
             const currentPost = allPosts.find(p => p.id == postId);
             
