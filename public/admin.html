@@ -14,10 +14,17 @@
 
     <!-- Login Screen -->
     <div id="login-screen" class="min-h-screen flex items-center justify-center">
-        <!-- ... (login form remains the same) ... -->
+        <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
+            <h1 class="text-2xl font-bold mb-6 text-center">Admin Login</h1>
+            <form id="login-form">
+                <input id="password-input" type="password" placeholder="Password" class="w-full p-3 border rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                <button type="submit" class="w-full bg-indigo-600 text-white p-3 rounded-lg font-semibold hover:bg-indigo-700">Login</button>
+                <p id="login-error" class="text-red-500 text-sm mt-2 text-center"></p>
+            </form>
+        </div>
     </div>
 
-    <!-- Main Dashboard -->
+    <!-- Main Dashboard (hidden by default) -->
     <div id="dashboard" class="hidden">
         <header class="bg-white shadow-md p-4 flex justify-between items-center">
             <h1 class="text-2xl font-bold text-gray-800">Admin Dashboard</h1>
@@ -30,19 +37,31 @@
                 <nav class="flex space-x-8" aria-label="Tabs">
                     <button class="tab active py-4 px-1 border-b-2 font-medium text-lg" data-tab="posts">Posts & Comments</button>
                     <button class="tab py-4 px-1 border-b-2 font-medium text-lg text-gray-500 hover:text-gray-700" data-tab="stickers">Stickers</button>
+                    <!-- ADDED: Notice Board Tab -->
                     <button class="tab py-4 px-1 border-b-2 font-medium text-lg text-gray-500 hover:text-gray-700" data-tab="notice">Notice Board</button>
                 </nav>
             </div>
 
-            <!-- Content Panels -->
-            <div id="posts-content"></div>
-            <div id="stickers-content" class="hidden"></div>
-            
-            <!-- Notice Board Content -->
+            <!-- Posts & Comments Content -->
+            <div id="posts-content">
+                <!-- Data will be loaded here -->
+            </div>
+
+            <!-- Stickers Content -->
+            <div id="stickers-content" class="hidden">
+                <div class="flex justify-end mb-4">
+                    <button id="open-sticker-upload-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700">Upload New Stickers</button>
+                </div>
+                <div id="sticker-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <!-- Stickers will be loaded here -->
+                </div>
+            </div>
+
+            <!-- ADDED: Notice Board Content Panel -->
             <div id="notice-content-admin" class="hidden">
                 <div class="bg-white p-6 rounded-lg shadow">
                     <h2 class="text-2xl font-bold mb-4">Edit Notice Board</h2>
-                    <textarea id="notice-textarea" class="w-full p-3 border rounded-lg mb-4 h-40"></textarea>
+                    <textarea id="notice-textarea" class="w-full p-3 border rounded-lg mb-4 h-40" placeholder="Enter the notice content here..."></textarea>
                     <button id="save-notice-btn" class="bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-indigo-700">Save Notice</button>
                     <p id="notice-save-status" class="text-green-600 text-sm mt-2"></p>
                 </div>
@@ -50,39 +69,211 @@
         </main>
     </div>
 
-    <!-- Modals (remain the same) -->
-    <!-- ... -->
+    <!-- Edit Modal -->
+    <div id="edit-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-11/12 max-w-lg">
+            <h2 id="edit-modal-title" class="text-xl font-bold mb-4">Edit Item</h2>
+            <textarea id="edit-textarea" class="w-full p-2 border rounded-lg mb-4 h-32"></textarea>
+            <div id="edit-likes-container" class="mb-4">
+                <label for="edit-likes" class="block text-sm font-medium text-gray-700">Likes</label>
+                <input id="edit-likes" type="number" class="w-full p-2 border rounded-lg">
+            </div>
+            <div class="flex justify-end space-x-2">
+                <button id="cancel-edit-btn" class="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+                <button id="save-edit-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sticker Upload Modal -->
+    <div id="sticker-upload-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-11/12 max-w-lg">
+            <h2 class="text-xl font-bold mb-4">Upload Stickers</h2>
+            <form id="sticker-upload-form">
+                <p class="text-sm text-gray-600 mb-2">Select one or more PNG, GIF, or WebP files (max 2MB each).</p>
+                <input id="sticker-file-input" type="file" accept="image/png,image/gif,image/webp" class="w-full p-2 border rounded-lg mb-4" required multiple>
+                <p id="upload-error" class="text-red-500 text-sm mb-2 text-center"></p>
+                <div class="flex justify-end space-x-2">
+                    <button id="cancel-upload-btn" type="button" class="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+                    <button id="upload-submit-btn" type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg">Upload</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script>
-        // --- State & DOM Elements ---
-        // ... (add new DOM elements)
+        // --- State ---
+        let ADMIN_PASSWORD = null;
+        let ALL_DATA = null;
+        let currentEdit = {};
+
+        // --- DOM Elements ---
+        const loginScreen = document.getElementById('login-screen');
+        const loginForm = document.getElementById('login-form');
+        const passwordInput = document.getElementById('password-input');
+        const loginError = document.getElementById('login-error');
+        const dashboard = document.getElementById('dashboard');
+        const logoutBtn = document.getElementById('logout-btn');
+        const tabs = document.querySelectorAll('.tab');
+        const postsContent = document.getElementById('posts-content');
+        const stickersContent = document.getElementById('stickers-content');
+        const stickerGrid = document.getElementById('sticker-grid');
+        const editModal = document.getElementById('edit-modal');
+        const editModalTitle = document.getElementById('edit-modal-title');
+        const editLikesContainer = document.getElementById('edit-likes-container');
+        const editLikesInput = document.getElementById('edit-likes');
+        const editTextArea = document.getElementById('edit-textarea');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
+        const saveEditBtn = document.getElementById('save-edit-btn');
+        const openStickerUploadBtn = document.getElementById('open-sticker-upload-btn');
+        const stickerUploadModal = document.getElementById('sticker-upload-modal');
+        const stickerUploadForm = document.getElementById('sticker-upload-form');
+        const stickerFileInput = document.getElementById('sticker-file-input');
+        const uploadError = document.getElementById('upload-error');
+        const cancelUploadBtn = document.getElementById('cancel-upload-btn');
+        const uploadSubmitBtn = document.getElementById('upload-submit-btn');
+        // ADDED: Notice Board elements
         const noticeContentAdmin = document.getElementById('notice-content-admin');
         const noticeTextarea = document.getElementById('notice-textarea');
         const saveNoticeBtn = document.getElementById('save-notice-btn');
         const noticeSaveStatus = document.getElementById('notice-save-status');
 
+        // --- API Helper ---
+        async function api(method, action, body = {}) {
+            const options = {
+                method,
+                headers: { 'Content-Type': 'application/json' }
+            };
+            if (method !== 'GET') {
+                options.body = JSON.stringify({ ...body, password: ADMIN_PASSWORD, action });
+            }
+            const url = `/api/admin${method === 'GET' ? `?password=${ADMIN_PASSWORD}` : ''}`;
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'API request failed');
+            }
+            return response.json();
+        }
+
         // --- Render Functions ---
         function render() {
             renderPosts();
             renderStickers();
-            renderNotice();
+            renderNotice(); // ADDED: Call render function for notice
+        }
+
+        function renderPosts() {
+            postsContent.innerHTML = '';
+            ALL_DATA.posts.forEach(post => {
+                const postComments = ALL_DATA.comments.filter(c => c.post_id === post.id);
+                const postPollOptions = ALL_DATA.poll_options.filter(p => p.post_id === post.id);
+
+                const postEl = document.createElement('div');
+                postEl.className = 'bg-white p-4 rounded-lg shadow mb-6';
+                postEl.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-gray-800">${post.content}</p>
+                            <p class="text-sm text-gray-500">ID: ${post.id} | Likes: ${post.likes}</p>
+                        </div>
+                        <div class="flex space-x-2 flex-shrink-0 ml-4">
+                            <button class="edit-btn text-sm text-blue-500" data-type="post" data-id="${post.id}">Edit</button>
+                            <button class="delete-btn text-sm text-red-500" data-type="post" data-id="${post.id}">Delete</button>
+                        </div>
+                    </div>
+                    ${postPollOptions.length > 0 ? `
+                    <div class="mt-4 border-t pt-2">
+                        <h4 class="font-semibold text-sm mb-2">Poll Options</h4>
+                        ${postPollOptions.map(opt => `
+                            <div class="flex justify-between items-center text-sm p-1">
+                                <p>${opt.option_text} (Votes: ${opt.votes})</p>
+                                <div class="flex space-x-2 flex-shrink-0 ml-2">
+                                    <button class="edit-btn text-xs text-blue-500" data-type="poll_option" data-id="${opt.id}">Edit</button>
+                                    <button class="delete-btn text-xs text-red-500" data-type="poll_option" data-id="${opt.id}">Delete</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    ` : ''}
+                    ${postComments.length > 0 ? `
+                    <div class="mt-4 border-t pt-2 pl-4">
+                        <h4 class="font-semibold text-sm mb-2">Comments</h4>
+                        ${postComments.map(comment => `
+                            <div class="flex justify-between items-start text-sm p-1 border-b">
+                                <p class="text-gray-700">${comment.content}</p>
+                                <div class="flex space-x-2 flex-shrink-0 ml-2">
+                                    <button class="edit-btn text-xs text-blue-500" data-type="comment" data-id="${comment.id}">Edit</button>
+                                    <button class="delete-btn text-xs text-red-500" data-type="comment" data-id="${comment.id}">Delete</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    ` : ''}
+                `;
+                postsContent.appendChild(postEl);
+            });
+        }
+
+        function renderStickers() {
+            stickerGrid.innerHTML = '';
+            ALL_DATA.stickers.forEach(sticker => {
+                const stickerEl = document.createElement('div');
+                stickerEl.className = 'bg-white p-2 rounded-lg shadow text-center';
+                stickerEl.innerHTML = `
+                    <img src="${sticker.url}" class="w-full h-24 object-contain mb-2">
+                    <button class="delete-btn text-sm text-red-500 w-full" data-type="sticker" data-id="${sticker.id}" data-url="${sticker.url}">Delete</button>
+                `;
+                stickerGrid.appendChild(stickerEl);
+            });
         }
         
+        // ADDED: Function to render the notice board content
         function renderNotice() {
             noticeTextarea.value = ALL_DATA.notice || '';
         }
 
         // --- Event Handlers ---
-        // ... (inside login success)
-        // ALL_DATA = data;
-        // render();
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loginError.textContent = '';
+            const pass = passwordInput.value;
+            try {
+                const response = await fetch('/api/admin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'login', password: pass })
+                });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Login failed');
+                }
+                ADMIN_PASSWORD = pass;
+                sessionStorage.setItem('admin_password', ADMIN_PASSWORD);
+                loginScreen.classList.add('hidden');
+                dashboard.classList.remove('hidden');
+                const data = await api('GET');
+                ALL_DATA = data;
+                render();
+            } catch (error) {
+                loginError.textContent = error.message;
+            }
+        });
+
+        logoutBtn.addEventListener('click', () => {
+            ADMIN_PASSWORD = null;
+            sessionStorage.removeItem('admin_password');
+            dashboard.classList.add('hidden');
+            loginScreen.classList.remove('hidden');
+            passwordInput.value = '';
+        });
 
         tabs.forEach(tab => {
             tab.addEventListener('click', (e) => {
                 // Hide all content panels
                 postsContent.classList.add('hidden');
                 stickersContent.classList.add('hidden');
-                noticeContentAdmin.classList.add('hidden');
+                noticeContentAdmin.classList.add('hidden'); // ADDED: Hide notice panel
                 // Deactivate all tabs
                 tabs.forEach(t => t.classList.remove('active'));
                 
@@ -97,14 +288,114 @@
             });
         });
 
+        document.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('delete-btn')) {
+                const { type, id, url } = e.target.dataset;
+                if (confirm(`Are you sure you want to delete this ${type.replace('_', ' ')}?`)) {
+                    try {
+                        await api('POST', `delete_${type}`, { id, content: url });
+                        const data = await api('GET');
+                        ALL_DATA = data;
+                        render();
+                    } catch (error) {
+                        alert(`Error: ${error.message}`);
+                    }
+                }
+            }
+            if (e.target.classList.contains('edit-btn')) {
+                const { type, id } = e.target.dataset;
+                currentEdit = { type, id };
+                let item;
+                if (type === 'post') item = ALL_DATA.posts.find(p => p.id == id);
+                if (type === 'comment') item = ALL_DATA.comments.find(c => c.id == id);
+                if (type === 'poll_option') item = ALL_DATA.poll_options.find(p => p.id == id);
+                editModalTitle.textContent = `Edit ${type.replace('_', ' ')}`;
+                editTextArea.value = item.content || item.option_text;
+                if (type === 'post') {
+                    editLikesContainer.classList.remove('hidden');
+                    editLikesInput.value = item.likes;
+                } else {
+                    editLikesContainer.classList.add('hidden');
+                }
+                editModal.classList.remove('hidden');
+                editModal.classList.add('flex');
+            }
+        });
+
+        cancelEditBtn.addEventListener('click', () => {
+            editModal.classList.add('hidden');
+            editModal.classList.remove('flex');
+        });
+
+        saveEditBtn.addEventListener('click', async () => {
+            const { type, id } = currentEdit;
+            const content = editTextArea.value;
+            const likes = editLikesInput.value;
+            try {
+                await api('POST', `update_${type}`, { id, content, likes });
+                const data = await api('GET');
+                ALL_DATA = data;
+                render();
+                editModal.classList.add('hidden');
+                editModal.classList.remove('flex');
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        });
+
+        // --- Sticker Upload Logic ---
+        openStickerUploadBtn.addEventListener('click', () => {
+            stickerUploadModal.classList.remove('hidden');
+            stickerUploadModal.classList.add('flex');
+        });
+        cancelUploadBtn.addEventListener('click', () => {
+            stickerUploadModal.classList.add('hidden');
+            stickerUploadModal.classList.remove('flex');
+        });
+        stickerUploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            uploadError.textContent = '';
+            const files = stickerFileInput.files;
+            if (!files.length) {
+                uploadError.textContent = 'Please select at least one file.';
+                return;
+            }
+            uploadSubmitBtn.disabled = true;
+            uploadSubmitBtn.textContent = 'Uploading...';
+            const formData = new FormData();
+            formData.append('password', ADMIN_PASSWORD);
+            for (const file of files) {
+                formData.append('stickers', file);
+            }
+            try {
+                const response = await fetch('/api/admin-upload-stickers', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error);
+                stickerUploadModal.classList.add('hidden');
+                stickerUploadModal.classList.remove('flex');
+                const data = await api('GET');
+                ALL_DATA = data;
+                render();
+            } catch (error) {
+                uploadError.textContent = error.message;
+            } finally {
+                uploadSubmitBtn.disabled = false;
+                uploadSubmitBtn.textContent = 'Upload';
+                stickerUploadForm.reset();
+            }
+        });
+        
+        // ADDED: Event listener for saving the notice
         saveNoticeBtn.addEventListener('click', async () => {
             const content = noticeTextarea.value;
             noticeSaveStatus.textContent = 'Saving...';
             try {
                 await api('POST', 'update_notice', { content });
                 noticeSaveStatus.textContent = 'Saved successfully!';
-                // Refresh data in background
-                const data = await api('GET');
+                const data = await api('GET'); // Refresh data
                 ALL_DATA = data;
             } catch (error) {
                 noticeSaveStatus.textContent = `Error: ${error.message}`;
@@ -113,7 +404,12 @@
             }
         });
 
-        // ... (rest of your existing admin.html script) ...
+        // --- Initial Load ---
+        const savedPass = sessionStorage.getItem('admin_password');
+        if (savedPass) {
+            passwordInput.value = savedPass;
+            loginForm.dispatchEvent(new Event('submit'));
+        }
     </script>
 </body>
 </html>
