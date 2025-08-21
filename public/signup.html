@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign Up - Curly Fiesta</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="min-h-screen flex items-center justify-center">
+        <div id="signup-container" class="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
+            <h1 class="text-2xl font-bold mb-6 text-center">Create Your Account</h1>
+            <button id="start-signup" class="w-full bg-indigo-600 text-white p-3 rounded-lg font-semibold hover:bg-indigo-700">Start Signup</button>
+            <div id="token-display" class="hidden mt-4">
+                <p class="text-red-600 font-bold text-center">IMPORTANT: Save this token! You will need it to log in. Do not lose it.</p>
+                <div class="bg-gray-200 p-4 rounded-lg mt-2 text-center font-mono break-words" id="auth-token"></div>
+            </div>
+            <form id="profile-form" class="hidden mt-4">
+                <input id="username-input" type="text" placeholder="Username" class="w-full p-3 border rounded-lg mb-4" required>
+                <input id="pfp-input" type="file" class="w-full p-3 border rounded-lg mb-4">
+                <button type="submit" class="w-full bg-green-600 text-white p-3 rounded-lg font-semibold hover:bg-green-700">Complete Profile</button>
+            </form>
+        </div>
+    </div>
+    <script>
+        const startSignupBtn = document.getElementById('start-signup');
+        const tokenDisplay = document.getElementById('token-display');
+        const authTokenEl = document.getElementById('auth-token');
+        const profileForm = document.getElementById('profile-form');
+        let generatedAuthToken = '';
+
+        startSignupBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/signup', { method: 'POST' });
+                const result = await response.json();
+                if (response.ok) {
+                    generatedAuthToken = result.authToken;
+                    authTokenEl.textContent = generatedAuthToken;
+                    tokenDisplay.classList.remove('hidden');
+                    profileForm.classList.remove('hidden');
+                    startSignupBtn.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Signup start failed', error);
+            }
+        });
+
+        profileForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('authToken', generatedAuthToken);
+            formData.append('username', document.getElementById('username-input').value);
+            const pfpFile = document.getElementById('pfp-input').files[0];
+            if(pfpFile) formData.append('profilePicture', pfpFile);
+
+            try {
+                const response = await fetch('/api/complete-profile', {
+                    method: 'POST',
+                    body: formData
+                });
+                if(response.ok) window.location.href = '/profile.html';
+            } catch (error) {
+                console.error('Profile completion failed', error);
+            }
+        });
+    </script>
+</body>
+</html>

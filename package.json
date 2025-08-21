@@ -10,6 +10,8 @@
     "@libsql/client": "latest",
     "@vercel/blob": "latest",
     "busboy": "latest",
-    "ably": "latest"
+    "ably": "latest",
+    "bcrypt": "^5.1.0",
+    "jsonwebtoken": "^9.0.0"
   }
 }

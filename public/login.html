@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - Curly Fiesta</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="min-h-screen flex items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
+            <h1 class="text-2xl font-bold mb-6 text-center">Login</h1>
+            <form id="login-form">
+                <input id="auth-token-input" type="text" placeholder="Enter your 32-character token" class="w-full p-3 border rounded-lg mb-4" required>
+                <button type="submit" class="w-full bg-indigo-600 text-white p-3 rounded-lg font-semibold hover:bg-indigo-700">Login</button>
+                <p id="login-error" class="text-red-500 text-sm mt-2 text-center"></p>
+            </form>
+             <p class="text-center mt-4">Don't have an account? <a href="/signup.html" class="text-indigo-600">Sign up</a></p>
+        </div>
+    </div>
+    <script>
+        const loginForm = document.getElementById('login-form');
+        const loginError = document.getElementById('login-error');
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const authToken = document.getElementById('auth-token-input').value;
+            loginError.textContent = '';
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ authToken })
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || 'Login failed');
+                window.location.href = '/profile.html';
+            } catch (error) {
+                loginError.textContent = error.message;
+            }
+        });
+    </script>
+</body>
+</html>
