@@ -61,7 +61,8 @@ export default async function handler(req, res) {
       
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const result = await db.execute({
-        sql: 'SELECT id, username, profile_picture_url, created_at FROM users WHERE id = ?',
+        // UPDATED: Select new 'bio' and 'urls' columns
+        sql: 'SELECT id, username, profile_picture_url, created_at, bio, urls FROM users WHERE id = ?',
         args: [decoded.userId],
       });
 
@@ -76,41 +77,74 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
         const contentType = req.headers['content-type'] || '';
 
-        // --- Route MULTIPART requests (for profile completion with file upload) ---
+        // --- Route MULTIPART requests (for profile completion and updates with file upload) ---
         if (contentType.includes('multipart/form-data')) {
             const { fields, fileBuffer, fileName, mimeType } = await parseMultipartForm(req);
             
-            if (fields.action !== 'complete-profile') {
-                return res.status(400).json({ error: 'Invalid action for multipart form' });
-            }
+            // --- ACTION: COMPLETE-PROFILE ---
+            if (fields.action === 'complete-profile') {
+                const { authToken, username } = fields;
+                if (!authToken || !username) return res.status(400).json({ error: 'Auth token and username are required' });
 
-            const { authToken, username } = fields;
-            if (!authToken || !username) return res.status(400).json({ error: 'Auth token and username are required' });
-
-            const users = await db.execute("SELECT * FROM users");
-            let user = null;
-            for(const u of users.rows){
-                if(await bcrypt.compare(authToken, u.auth_token_hash)) {
-                    user = u;
-                    break;
+                const users = await db.execute("SELECT * FROM users");
+                let user = null;
+                for(const u of users.rows){
+                    if(await bcrypt.compare(authToken, u.auth_token_hash)) {
+                        user = u;
+                        break;
+                    }
                 }
+                if (!user) return res.status(404).json({ error: 'Invalid auth token' });
+
+                let profilePictureUrl = null;
+                if (fileBuffer && fileName) {
+                    const blob = await put(`pfp-${Date.now()}-${fileName}`, fileBuffer, { contentType: mimeType, access: 'public' });
+                    profilePictureUrl = blob.url;
+                }
+
+                await db.execute({
+                    sql: 'UPDATE users SET username = ?, profile_picture_url = ? WHERE id = ?',
+                    args: [username, profilePictureUrl, user.id]
+                });
+
+                const token = jwt.sign({ userId: user.id, username }, process.env.JWT_SECRET, { expiresIn: '7d' });
+                res.setHeader('Set-Cookie', `token=${token}; HttpOnly; Path=/; Max-Age=604800; SameSite=Lax`);
+                return res.status(200).json({ success: true, message: 'Profile completed' });
             }
-            if (!user) return res.status(404).json({ error: 'Invalid auth token' });
 
-            let profilePictureUrl = null;
-            if (fileBuffer && fileName) {
-                const blob = await put(`pfp-${Date.now()}-${fileName}`, fileBuffer, { contentType: mimeType, access: 'public' });
-                profilePictureUrl = blob.url;
+            // --- NEW ACTION: UPDATE-PROFILE ---
+            if (fields.action === 'update-profile') {
+                const token = req.cookies.token;
+                if (!token) return res.status(401).json({ error: 'Not authenticated' });
+                
+                const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                const userId = decoded.userId;
+
+                const { username, bio, urls } = fields;
+
+                let profilePictureUrl = null;
+                if (fileBuffer && fileName) {
+                    const blob = await put(`pfp-update-${Date.now()}-${fileName}`, fileBuffer, { contentType: mimeType, access: 'public' });
+                    profilePictureUrl = blob.url;
+                }
+                
+                const { rows: [currentUser] } = await db.execute({ sql: 'SELECT profile_picture_url FROM users WHERE id = ?', args: [userId] });
+
+                await db.execute({
+                    sql: 'UPDATE users SET username = ?, bio = ?, urls = ?, profile_picture_url = ? WHERE id = ?',
+                    args: [
+                        username, 
+                        bio, 
+                        urls,
+                        profilePictureUrl || currentUser.profile_picture_url, // Use new URL if uploaded, otherwise keep old one
+                        userId
+                    ]
+                });
+                
+                return res.status(200).json({ success: true, message: 'Profile updated' });
             }
 
-            await db.execute({
-                sql: 'UPDATE users SET username = ?, profile_picture_url = ? WHERE id = ?',
-                args: [username, profilePictureUrl, user.id]
-            });
-
-            const token = jwt.sign({ userId: user.id, username }, process.env.JWT_SECRET, { expiresIn: '7d' });
-            res.setHeader('Set-Cookie', `token=${token}; HttpOnly; Path=/; Max-Age=604800; SameSite=Lax`);
-            return res.status(200).json({ success: true, message: 'Profile completed' });
+            return res.status(400).json({ error: 'Invalid multipart action' });
         }
         
         // --- Route JSON requests (for signup and login) ---
@@ -160,10 +194,7 @@ export default async function handler(req, res) {
             return res.status(415).json({ error: `Unsupported content type: ${contentType}` });
         }
     }
-
-    // =============================================
-    //  HANDLE OTHER HTTP METHODS
-    // =============================================
+    
     return res.status(405).json({ error: `Method ${req.method} not allowed` });
 
   } catch (err) {
