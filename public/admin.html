@@ -47,7 +47,12 @@
 
             <!-- Stickers Content -->
             <div id="stickers-content" class="hidden">
-                <!-- Data will be loaded here -->
+                <div class="flex justify-end mb-4">
+                    <button id="open-sticker-upload-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-indigo-700">Upload New Stickers</button>
+                </div>
+                <div id="sticker-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <!-- Stickers will be loaded here -->
+                </div>
             </div>
         </main>
     </div>
@@ -68,6 +73,22 @@
         </div>
     </div>
 
+    <!-- Sticker Upload Modal -->
+    <div id="sticker-upload-modal" class="fixed inset-0 z-50 hidden items-center justify-center modal-backdrop">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-11/12 max-w-lg">
+            <h2 class="text-xl font-bold mb-4">Upload Stickers</h2>
+            <form id="sticker-upload-form">
+                <p class="text-sm text-gray-600 mb-2">Select one or more PNG, GIF, or WebP files (max 2MB each).</p>
+                <input id="sticker-file-input" type="file" accept="image/png,image/gif,image/webp" class="w-full p-2 border rounded-lg mb-4" required multiple>
+                <p id="upload-error" class="text-red-500 text-sm mb-2 text-center"></p>
+                <div class="flex justify-end space-x-2">
+                    <button id="cancel-upload-btn" type="button" class="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+                    <button id="upload-submit-btn" type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg">Upload</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         // --- State ---
         let ADMIN_PASSWORD = null;
@@ -84,6 +105,7 @@
         const tabs = document.querySelectorAll('.tab');
         const postsContent = document.getElementById('posts-content');
         const stickersContent = document.getElementById('stickers-content');
+        const stickerGrid = document.getElementById('sticker-grid');
         const editModal = document.getElementById('edit-modal');
         const editModalTitle = document.getElementById('edit-modal-title');
         const editLikesContainer = document.getElementById('edit-likes-container');
@@ -91,8 +113,15 @@
         const editTextArea = document.getElementById('edit-textarea');
         const cancelEditBtn = document.getElementById('cancel-edit-btn');
         const saveEditBtn = document.getElementById('save-edit-btn');
+        const openStickerUploadBtn = document.getElementById('open-sticker-upload-btn');
+        const stickerUploadModal = document.getElementById('sticker-upload-modal');
+        const stickerUploadForm = document.getElementById('sticker-upload-form');
+        const stickerFileInput = document.getElementById('sticker-file-input');
+        const uploadError = document.getElementById('upload-error');
+        const cancelUploadBtn = document.getElementById('cancel-upload-btn');
+        const uploadSubmitBtn = document.getElementById('upload-submit-btn');
 
-        // --- API Helper for Authenticated Requests ---
+        // --- API Helper ---
         async function api(method, action, body = {}) {
             const options = {
                 method,
@@ -130,19 +159,18 @@
                             <p class="text-gray-800">${post.content}</p>
                             <p class="text-sm text-gray-500">ID: ${post.id} | Likes: ${post.likes}</p>
                         </div>
-                        <div class="flex space-x-2">
+                        <div class="flex space-x-2 flex-shrink-0 ml-4">
                             <button class="edit-btn text-sm text-blue-500" data-type="post" data-id="${post.id}">Edit</button>
                             <button class="delete-btn text-sm text-red-500" data-type="post" data-id="${post.id}">Delete</button>
                         </div>
                     </div>
-                    <!-- Polls -->
                     ${postPollOptions.length > 0 ? `
                     <div class="mt-4 border-t pt-2">
                         <h4 class="font-semibold text-sm mb-2">Poll Options</h4>
                         ${postPollOptions.map(opt => `
                             <div class="flex justify-between items-center text-sm p-1">
                                 <p>${opt.option_text} (Votes: ${opt.votes})</p>
-                                <div>
+                                <div class="flex space-x-2 flex-shrink-0 ml-2">
                                     <button class="edit-btn text-xs text-blue-500" data-type="poll_option" data-id="${opt.id}">Edit</button>
                                     <button class="delete-btn text-xs text-red-500" data-type="poll_option" data-id="${opt.id}">Delete</button>
                                 </div>
@@ -150,14 +178,13 @@
                         `).join('')}
                     </div>
                     ` : ''}
-                    <!-- Comments -->
                     ${postComments.length > 0 ? `
                     <div class="mt-4 border-t pt-2 pl-4">
                         <h4 class="font-semibold text-sm mb-2">Comments</h4>
                         ${postComments.map(comment => `
                             <div class="flex justify-between items-start text-sm p-1 border-b">
                                 <p class="text-gray-700">${comment.content}</p>
-                                <div>
+                                <div class="flex space-x-2 flex-shrink-0 ml-2">
                                     <button class="edit-btn text-xs text-blue-500" data-type="comment" data-id="${comment.id}">Edit</button>
                                     <button class="delete-btn text-xs text-red-500" data-type="comment" data-id="${comment.id}">Delete</button>
                                 </div>
@@ -171,8 +198,7 @@
         }
 
         function renderStickers() {
-            stickersContent.innerHTML = '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>';
-            const grid = stickersContent.querySelector('.grid');
+            stickerGrid.innerHTML = '';
             ALL_DATA.stickers.forEach(sticker => {
                 const stickerEl = document.createElement('div');
                 stickerEl.className = 'bg-white p-2 rounded-lg shadow text-center';
@@ -180,7 +206,7 @@
                     <img src="${sticker.url}" class="w-full h-24 object-contain mb-2">
                     <button class="delete-btn text-sm text-red-500 w-full" data-type="sticker" data-id="${sticker.id}" data-url="${sticker.url}">Delete</button>
                 `;
-                grid.appendChild(stickerEl);
+                stickerGrid.appendChild(stickerEl);
             });
         }
 
@@ -189,30 +215,15 @@
             e.preventDefault();
             loginError.textContent = '';
             const pass = passwordInput.value;
-
             try {
-                // ** FIX: Use a dedicated fetch call for login **
-                const response = await fetch('/api/admin', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'login', password: pass })
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Login failed');
-                }
-
-                // If login is successful
+                await api('POST', 'login', { password: pass });
                 ADMIN_PASSWORD = pass;
                 sessionStorage.setItem('admin_password', ADMIN_PASSWORD);
                 loginScreen.classList.add('hidden');
                 dashboard.classList.remove('hidden');
-                
-                const data = await api('GET'); // Now fetch data with the stored password
+                const data = await api('GET');
                 ALL_DATA = data;
                 render();
-
             } catch (error) {
                 loginError.textContent = error.message;
             }
@@ -228,19 +239,14 @@
 
         tabs.forEach(tab => {
             tab.addEventListener('click', (e) => {
-                // Hide all content panels
                 postsContent.classList.add('hidden');
                 stickersContent.classList.add('hidden');
-                // Deactivate all tabs
                 tabs.forEach(t => t.classList.remove('active'));
-                
-                // Activate the clicked tab and show its content
                 const tabName = e.currentTarget.dataset.tab;
                 e.currentTarget.classList.add('active');
                 document.getElementById(`${tabName}-content`).classList.remove('hidden');
             });
         });
-
 
         document.addEventListener('click', async (e) => {
             if (e.target.classList.contains('delete-btn')) {
@@ -256,26 +262,21 @@
                     }
                 }
             }
-
             if (e.target.classList.contains('edit-btn')) {
                 const { type, id } = e.target.dataset;
                 currentEdit = { type, id };
-                
                 let item;
                 if (type === 'post') item = ALL_DATA.posts.find(p => p.id == id);
                 if (type === 'comment') item = ALL_DATA.comments.find(c => c.id == id);
                 if (type === 'poll_option') item = ALL_DATA.poll_options.find(p => p.id == id);
-
                 editModalTitle.textContent = `Edit ${type.replace('_', ' ')}`;
                 editTextArea.value = item.content || item.option_text;
-                
                 if (type === 'post') {
                     editLikesContainer.classList.remove('hidden');
                     editLikesInput.value = item.likes;
                 } else {
                     editLikesContainer.classList.add('hidden');
                 }
-                
                 editModal.classList.remove('hidden');
                 editModal.classList.add('flex');
             }
@@ -299,6 +300,57 @@
                 editModal.classList.remove('flex');
             } catch (error) {
                 alert(`Error: ${error.message}`);
+            }
+        });
+
+        // --- Sticker Upload Logic ---
+        openStickerUploadBtn.addEventListener('click', () => {
+            stickerUploadModal.classList.remove('hidden');
+            stickerUploadModal.classList.add('flex');
+        });
+        cancelUploadBtn.addEventListener('click', () => {
+            stickerUploadModal.classList.add('hidden');
+            stickerUploadModal.classList.remove('flex');
+        });
+        stickerUploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            uploadError.textContent = '';
+            const files = stickerFileInput.files;
+            if (!files.length) {
+                uploadError.textContent = 'Please select at least one file.';
+                return;
+            }
+
+            uploadSubmitBtn.disabled = true;
+            uploadSubmitBtn.textContent = 'Uploading...';
+
+            const formData = new FormData();
+            formData.append('password', ADMIN_PASSWORD);
+            for (const file of files) {
+                formData.append('stickers', file);
+            }
+
+            try {
+                const response = await fetch('/api/admin-upload-stickers', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error);
+                
+                stickerUploadModal.classList.add('hidden');
+                stickerUploadModal.classList.remove('flex');
+                
+                const data = await api('GET'); // Refresh all data
+                ALL_DATA = data;
+                render();
+
+            } catch (error) {
+                uploadError.textContent = error.message;
+            } finally {
+                uploadSubmitBtn.disabled = false;
+                uploadSubmitBtn.textContent = 'Upload';
+                stickerUploadForm.reset();
             }
         });
 
