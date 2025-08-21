@@ -1,39 +1,33 @@
 import { db } from "../lib/db.js";
 import { del } from "@vercel/blob";
 
-// This is the single, secure endpoint for all admin actions.
 export default async function handler(req, res) {
-  const { password, action, id, content, likes } = req.body;
-
-  // IMPORTANT: Every action requires the admin password from the environment variables.
+  // IMPORTANT: Check for password configuration first.
   if (!process.env.ADMIN_PASSWORD) {
     return res.status(500).json({ error: "Admin password is not configured." });
   }
 
-  // Authenticate every request
-  if (req.method !== 'GET' && password !== process.env.ADMIN_PASSWORD) {
-    if (action !== 'login') { // Login is a special case
-        return res.status(401).json({ error: "Unauthorized" });
+  // Handle the login action separately and first.
+  if (req.method === 'POST' && req.body.action === 'login') {
+    if (req.body.password === process.env.ADMIN_PASSWORD) {
+      return res.status(200).json({ success: true, message: "Login successful" });
+    } else {
+      return res.status(401).json({ error: "Invalid password" });
     }
   }
 
+  // For all other actions, perform a unified authentication check.
+  const providedPassword = req.method === 'GET' ? req.query.password : req.body.password;
+  if (providedPassword !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  // If authenticated, proceed with the requested action.
   try {
-    // --- AUTHENTICATION ---
-    if (req.method === 'POST' && action === 'login') {
-      if (req.body.password === process.env.ADMIN_PASSWORD) {
-        return res.status(200).json({ success: true, message: "Login successful" });
-      } else {
-        return res.status(401).json({ error: "Invalid password" });
-      }
-    }
+    const { action, id, content, likes } = req.body;
 
     // --- DATA FETCHING ---
     if (req.method === 'GET') {
-      // For GET requests, password must be in query params for simplicity
-      if (req.query.password !== process.env.ADMIN_PASSWORD) {
-          return res.status(401).json({ error: "Unauthorized" });
-      }
-      
       const postsResult = await db.execute("SELECT * FROM posts ORDER BY created_at DESC");
       const commentsResult = await db.execute("SELECT * FROM comments ORDER BY created_at DESC");
       const pollsResult = await db.execute("SELECT * FROM poll_options");
@@ -57,7 +51,6 @@ export default async function handler(req, res) {
           await db.execute({ sql: "DELETE FROM comments WHERE id = ?", args: [id] });
           break;
         case 'delete_sticker':
-          // Also delete from Vercel Blob storage
           await del(content); // content here holds the sticker URL
           await db.execute({ sql: "DELETE FROM stickers WHERE id = ?", args: [id] });
           break;
@@ -87,10 +80,16 @@ export default async function handler(req, res) {
       }
       return res.status(200).json({ success: true });
     }
+    
+    // If no action matched for an authenticated POST request
+    if (req.method === 'POST') {
+        return res.status(400).json({ error: "Invalid action specified." });
+    }
 
-    return res.status(405).json({ error: "Method or action not allowed" });
+    return res.status(405).json({ error: "Method not allowed" });
 
   } catch (err) {
+    const action = req.body.action || 'GET';
     console.error(`Admin action failed [${action}]:`, err);
     return res.status(500).json({ error: "An internal server error occurred." });
   }
