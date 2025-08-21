@@ -211,19 +211,35 @@
         }
 
         // --- Event Handlers ---
+        // ** FIX: Rewritten Login Handler **
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             loginError.textContent = '';
             const pass = passwordInput.value;
+
             try {
-                await api('POST', 'login', { password: pass });
+                // Use a direct fetch for login to ensure the correct password is sent
+                const response = await fetch('/api/admin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'login', password: pass })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Login failed');
+                }
+
+                // If login is successful, store the password and load the dashboard
                 ADMIN_PASSWORD = pass;
                 sessionStorage.setItem('admin_password', ADMIN_PASSWORD);
                 loginScreen.classList.add('hidden');
                 dashboard.classList.remove('hidden');
-                const data = await api('GET');
+                
+                const data = await api('GET'); // Now fetch data with the stored password
                 ALL_DATA = data;
                 render();
+
             } catch (error) {
                 loginError.textContent = error.message;
             }
