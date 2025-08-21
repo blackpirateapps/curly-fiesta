@@ -31,7 +31,7 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
       border: 1px solid #e5e5e5;
     }
-    
+
     /* --- iOS-style Inputs & Buttons --- */
     textarea.ios-input, input.ios-input {
       border: 1px solid #d1d1d6;
@@ -44,7 +44,7 @@
       border-color: #007aff;
       box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
     }
-    
+
     .ios-button {
       background-color: #007aff;
       color: white;
@@ -63,7 +63,7 @@
       background-color: #d1d1d6;
       cursor: not-allowed;
     }
-    
+
     .ios-button-secondary {
        background-color: #e5e5e5;
        color: #007aff;
@@ -100,7 +100,7 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    
+
     /* --- Action Buttons (Like/Comment) --- */
     .action-button {
       background: none;
@@ -127,7 +127,7 @@
     .action-button:disabled {
       opacity: 0.5;
     }
-    
+
     /* --- Poll Styles --- */
     .poll-option {
         background-color: #f0f2f5;
@@ -180,12 +180,18 @@
       </div>
       <p class="pt-2 border-t border-gray-200">Welcome to Curly Fiesta, the anonymous social hub for your campus. Share confessions, spill the latest rumors, and find out what's <em>really</em> going on. What you see here, stays here... maybe.</p>
     </div>
-  
+
+    <!-- Notice Board -->
+    <div id="notice-board" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-lg shadow-sm mb-6" role="alert">
+        <p class="font-bold">Notice Board</p>
+        <p id="notice-content">Loading...</p>
+    </div>
+
     <!-- New Post Form -->
     <div class="post-card p-4">
       <form id="postForm" enctype="multipart/form-data">
         <textarea id="postText" placeholder="What's happening? Ask a question for a poll..." class="ios-input w-full p-2 mb-3" required></textarea>
-        
+
         <!-- Poll Creation UI -->
         <div id="poll-creator" class="hidden space-y-2 mb-3">
             <input type="text" placeholder="Option 1" class="ios-input w-full poll-option-input">
@@ -209,7 +215,7 @@
 
     <!-- Posts Container -->
     <div id="posts"></div>
-    
+
     <!-- Initial Loading Spinner -->
     <div id="main-loader" class="loader-container">
       <div class="loader"></div>
@@ -262,7 +268,8 @@
         if (!r.ok) throw new Error(`API call failed: ${url}`);
         return r.json();
     }
-    const getPosts = () => apiCall("/api/getPosts");
+    // UPDATED: Renamed to reflect it gets all homepage data
+    const getHomepageData = () => apiCall("/api/getPosts");
     const createPost = (fd) => fetch("/api/createPost", { method: "POST", body: fd });
     const getComments = (postId) => apiCall(`/api/comment?post_id=${encodeURIComponent(postId)}`);
     const createComment = (fd) => fetch("/api/comment", { method: "POST", body: fd });
@@ -271,14 +278,22 @@
 
 
     // ---------- RENDER LOGIC ----------
-    async function loadPosts() {
+    // UPDATED: This function now renders the notice as well as the posts
+    async function loadHomepage() {
       const mainLoader = document.getElementById("main-loader");
       const postsContainer = document.getElementById("posts");
+      const noticeContentEl = document.getElementById("notice-content");
+      
       mainLoader.classList.remove("hidden");
       postsContainer.innerHTML = "";
 
       try {
-        const posts = await getPosts();
+        const { posts, notice } = await getHomepageData();
+        
+        // Render Notice
+        noticeContentEl.textContent = notice;
+
+        // Render Posts
         const likedItems = getLikedItems();
         const votedPolls = getVotedPolls();
 
@@ -288,7 +303,6 @@
           card.className = "post-card p-4";
 
           let pollHTML = '';
-          // FIX: Check if post.poll_options is not null and is an array
           if (post.poll_options && Array.isArray(post.poll_options)) {
               const userVoteOptionId = votedPolls[post.id];
               const totalVotes = post.poll_options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
@@ -318,11 +332,11 @@
                 <span>${post.likes ?? 0}</span>
               </button>
               <button class="action-button toggle-comments">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2_0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2_0 0 1 2 2z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 <span>Comments</span>
               </button>
               <button class="action-button share-post ml-auto">
-                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2_0 0 0 2 2h12a2 2_0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>
+                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>
                  <span>Share</span>
               </button>
             </div>
@@ -342,6 +356,7 @@
         });
       } catch (error) {
         postsContainer.innerHTML = `<div class="post-card p-4 text-red-500">Could not load posts. Please try again later.</div>`;
+        noticeContentEl.textContent = "Could not load notice.";
         console.error(error);
       } finally {
         mainLoader.classList.add("hidden");
@@ -356,7 +371,7 @@
 
         const span = button.querySelector("span");
         const currentLikes = parseInt(span.textContent, 10);
-        
+
         button.classList.add("liked");
         span.textContent = currentLikes + 1;
         addLikedItem('post', post.id);
@@ -367,7 +382,7 @@
           console.error("Like failed:", error);
         }
       });
-      
+
       // Share post
       const shareButton = card.querySelector(".share-post");
       if (!navigator.share) {
@@ -399,13 +414,16 @@
 
             const postId = e.currentTarget.dataset.postId;
             const optionId = parseInt(e.currentTarget.dataset.optionId, 10);
-            
+
             addVotedPoll(postId, optionId);
             pollContainer.classList.add('voted');
-            
-            const allPosts = await getPosts();
+
+            // Re-fetch to get the most up-to-date vote counts for rendering results
+            const { posts: allPosts } = await getHomepageData();
             const currentPost = allPosts.find(p => p.id == postId);
             
+            if (!currentPost) return;
+
             const options = Array.from(pollContainer.querySelectorAll('.poll-option'));
             let totalVotes = currentPost.poll_options.reduce((sum, opt) => sum + opt.votes, 0) + 1;
             
@@ -442,7 +460,7 @@
         const originalButtonText = button.innerHTML;
         button.innerHTML = `<div class="loader-small"></div>`;
         button.disabled = true;
-        
+
         try {
           const fd = new FormData();
           fd.append("post_id", post.id);
@@ -495,11 +513,11 @@
         const fd = new FormData();
         fd.append("content", textEl.value);
         if (imgEl.files.length) fd.append("image", imgEl.files[0]);
-        
+
         const pollOptions = Array.from(document.querySelectorAll('.poll-option-input'))
             .map(input => input.value.trim())
             .filter(value => value);
-        
+
         if (pollOptions.length > 1) {
             fd.append('pollOptions', JSON.stringify(pollOptions));
         }
@@ -509,7 +527,7 @@
         document.getElementById('poll-creator').classList.add('hidden');
         document.getElementById('add-option-container').classList.add('hidden');
         document.getElementById('create-poll-btn').textContent = 'Create Poll';
-        await loadPosts();
+        await loadHomepage(); // Use the new function to reload
       } catch (error) {
         console.error("Post creation failed:", error);
         alert("Could not create post. Please try again.");
@@ -519,7 +537,7 @@
       }
     });
 
-    loadPosts();
+    loadHomepage();
   </script>
 </body>
 </html>
