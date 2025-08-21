@@ -14,7 +14,7 @@
     <script>
         async function loadProfile() {
             try {
-                const response = await fetch('/api/profile');
+                const response = await fetch('/api/profile?action=get-profile');
                 if (response.status === 401) {
                     window.location.href = '/login.html';
                     return;

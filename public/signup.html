@@ -31,7 +31,11 @@
 
         startSignupBtn.addEventListener('click', async () => {
             try {
-                const response = await fetch('/api/signup', { method: 'POST' });
+                const response = await fetch('/api/profile', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'start-signup' })
+                });
                 const result = await response.json();
                 if (response.ok) {
                     generatedAuthToken = result.authToken;
@@ -48,13 +52,14 @@
         profileForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData();
+            formData.append('action', 'complete-profile');
             formData.append('authToken', generatedAuthToken);
             formData.append('username', document.getElementById('username-input').value);
             const pfpFile = document.getElementById('pfp-input').files[0];
             if(pfpFile) formData.append('profilePicture', pfpFile);
 
             try {
-                const response = await fetch('/api/complete-profile', {
+                const response = await fetch('/api/profile', {
                     method: 'POST',
                     body: formData
                 });
