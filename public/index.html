@@ -301,7 +301,7 @@
                 const { user } = await apiCall('/api/profile?action=get-profile');
                 authLinksContainer.innerHTML = `
                     <a href="/profile.html" class="flex items-center space-x-2 text-sm font-semibold text-gray-700 hover:text-indigo-600">
-                        <img src="${user.profile_picture_url || 'https://via.placeholder.com/150'}" alt="Profile" class="w-8 h-8 rounded-full object-cover">
+                        <img src="${user.profile_picture_url || 'https://via.placeholder.com/150'}" alt="Profile" class="w-8 h-8 rounded-full object-cover border-2 border-gray-200">
                         <span>${esc(user.username)}</span>
                     </a>`;
             } catch (e) {
@@ -314,148 +314,206 @@
 
     // ---------- RENDER LOGIC ----------
     async function loadHomepage() {
-      const mainLoader = document.getElementById("main-loader");
-      const postsContainer = document.getElementById("posts");
-      mainLoader.classList.remove("hidden");
-      postsContainer.innerHTML = "";
+        const mainLoader = document.getElementById("main-loader");
+        const postsContainer = document.getElementById("posts");
+        mainLoader.classList.remove("hidden");
+        postsContainer.innerHTML = "";
 
-      try {
-        const { posts, notice } = await getHomepageData();
-        document.getElementById("notice-content").innerHTML = (notice || "").replace(/\[sticker:(.*?)\]/g, `<img src="$1" alt="sticker">`);
-        const likedItems = getLikedItems();
-        const votedPolls = getVotedPolls();
+        try {
+            const { posts, notice } = await getHomepageData();
+            document.getElementById("notice-content").innerHTML = (notice || "").replace(/\[sticker:(.*?)\]/g, `<img src="$1" alt="sticker">`);
+            const likedItems = getLikedItems();
+            const votedPolls = getVotedPolls();
 
-        posts.forEach(post => {
-          const card = document.createElement("div");
-          card.className = "post-card p-4";
-          let pollHTML = '';
-          if (post.poll_options && Array.isArray(post.poll_options)) {
-              const userVoteOptionId = votedPolls[post.id];
-              const totalVotes = post.poll_options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
-              pollHTML = `<div class="poll-container mt-3 ${userVoteOptionId ? 'voted' : ''}">${post.poll_options.map(opt => {
-                  const percentage = totalVotes > 0 ? (((opt.votes || 0) / totalVotes) * 100).toFixed(1) : 0;
-                  return `<div class="poll-option ${userVoteOptionId === opt.id ? 'voted' : ''}" data-option-id="${opt.id}" data-post-id="${post.id}">
-                        <div class="poll-option-result" style="width: ${userVoteOptionId ? percentage : 0}%;"></div>
-                        <div class="poll-option-text flex justify-between"><span>${esc(opt.option_text)}</span>${userVoteOptionId ? `<span>${percentage}%</span>` : ''}</div>
+            posts.forEach(post => {
+                const card = document.createElement("div");
+                card.className = "post-card p-4";
+                
+                let pollHTML = '';
+                if (post.poll_options && Array.isArray(post.poll_options) && post.poll_options.length > 0) {
+                    const userVoteOptionId = votedPolls[post.id];
+                    const totalVotes = post.poll_options.reduce((sum, opt) => sum + (opt.votes || 0), 0);
+                    pollHTML = `<div class="poll-container mt-3 ${userVoteOptionId ? 'voted' : ''}">${post.poll_options.map(opt => {
+                        const percentage = totalVotes > 0 ? (((opt.votes || 0) / totalVotes) * 100).toFixed(1) : 0;
+                        return `<div class="poll-option ${userVoteOptionId == opt.id ? 'voted' : ''}" data-option-id="${opt.id}" data-post-id="${post.id}">
+                            <div class="poll-option-result" style="width: ${userVoteOptionId ? percentage : 0}%;"></div>
+                            <div class="poll-option-text flex justify-between"><span>${esc(opt.option_text)}</span>${userVoteOptionId ? `<span>${percentage}%</span>` : ''}</div>
+                        </div>`;
+                    }).join('')}</div>`;
+                }
+
+                card.innerHTML = `
+                    <p class="text-xs text-gray-500 mb-2">${timeAgo(post.created_at)}</p>
+                    <p class="mb-3 whitespace-pre-wrap">${esc(post.content || "")}</p>
+                    ${post.image_url ? `<img src="${post.image_url}" class="w-full rounded-lg mb-3 border border-gray-200" crossorigin="anonymous">` : ""}
+                    ${pollHTML}
+                    <div class="flex gap-2 text-sm text-gray-600 mt-3 border-t pt-2">
+                        <button class="action-button like-post ${likedItems.posts.includes(post.id) ? 'liked' : ''}" data-post-id="${post.id}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                            <span>${post.likes ?? 0}</span>
+                        </button>
+                        <button class="action-button toggle-comments" data-post-id="${post.id}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            <span>Comments</span>
+                        </button>
+                        <button class="action-button share-post ml-auto">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>
+                            <span>Share</span>
+                        </button>
+                    </div>
+                    <div class="comments hidden mt-3 border-t pt-3">
+                        <div class="loader-container hidden"><div class="loader-small"></div></div>
+                        <div class="thread space-y-3"></div>
+                        <div class="mt-4">
+                            <textarea class="c-text w-full ios-input text-sm" placeholder="Add a comment..."></textarea>
+                            <div class="flex justify-end mt-2"><button class="c-submit ios-button ios-button-secondary text-sm"><span>Comment</span></button></div>
+                        </div>
                     </div>`;
-              }).join('')}</div>`;
-          }
-
-          card.innerHTML = `
-            <p class="text-xs text-gray-500 mb-2">${timeAgo(post.created_at)}</p>
-            <p class="mb-3 whitespace-pre-wrap">${esc(post.content || "")}</p>
-            ${post.image_url ? `<img src="${post.image_url}" class="w-full rounded-lg mb-3 border border-gray-200">` : ""}
-            ${pollHTML}
-            <div class="flex gap-2 text-sm text-gray-600 mt-3 border-t pt-2">
-              <button class="action-button like-post ${likedItems.posts.includes(post.id) ? 'liked' : ''}" data-post-id="${post.id}">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
-                <span>${post.likes ?? 0}</span>
-              </button>
-              <button class="action-button toggle-comments" data-post-id="${post.id}">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                <span>Comments</span>
-              </button>
-              <button class="action-button share-post ml-auto">
-                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>
-                 <span>Share</span>
-              </button>
-            </div>
-            <div class="comments hidden mt-3 border-t pt-3">
-              <div class="loader-container hidden"><div class="loader-small"></div></div>
-              <div class="thread space-y-3"></div>
-              <div class="mt-4">
-                <textarea class="c-text w-full ios-input text-sm" placeholder="Add a comment..."></textarea>
-                <div class="flex justify-end mt-2"><button class="c-submit ios-button ios-button-secondary text-sm"><span>Comment</span></button></div>
-              </div>
-            </div>`;
-          postsContainer.appendChild(card);
-          addPostEventListeners(card, post);
-        });
-      } catch (error) {
-        postsContainer.innerHTML = `<div class="post-card p-4 text-red-500">Could not load posts. Please try again.</div>`;
-        console.error(error);
-      } finally {
-        mainLoader.classList.add("hidden");
-      }
+                postsContainer.appendChild(card);
+                addPostEventListeners(card, post);
+            });
+        } catch (error) {
+            postsContainer.innerHTML = `<div class="post-card p-4 text-red-500">Could not load posts.</div>`;
+            console.error(error);
+        } finally {
+            mainLoader.classList.add("hidden");
+        }
     }
 
     function addPostEventListeners(card, post) {
-      card.querySelector(".like-post").addEventListener("click", async (e) => {
-        const button = e.currentTarget;
-        if (button.classList.contains('liked')) return;
-        const span = button.querySelector("span");
-        span.textContent = parseInt(span.textContent) + 1;
-        button.classList.add("liked");
-        addLikedItem('post', post.id);
-        try { await sendLike("post", post.id); } catch (e) { console.error(e); }
-      });
+        card.querySelector(".like-post").addEventListener("click", async (e) => {
+            const button = e.currentTarget;
+            if (button.classList.contains('liked')) return;
+            const span = button.querySelector("span");
+            span.textContent = parseInt(span.textContent) + 1;
+            button.classList.add("liked");
+            addLikedItem('post', post.id);
+            try { await sendLike("post", post.id); } catch (error) { console.error("Like failed:", error); }
+        });
 
-      const shareButton = card.querySelector(".share-post");
-      if (!navigator.share) {
-        shareButton.style.display = 'none';
-      } else {
-        shareButton.addEventListener("click", async () => { /* ... share logic ... */ });
-      }
-
-      card.querySelectorAll('.poll-option').forEach(option => {
-        option.addEventListener('click', async (e) => { /* ... poll logic ... */ });
-      });
-
-      // --- FIXED: Comment loading logic ---
-      card.querySelector(".toggle-comments").addEventListener("click", async (e) => {
-          const commentsWrap = card.querySelector(".comments");
-          const thread = commentsWrap.querySelector(".thread");
-          const loader = commentsWrap.querySelector(".loader-container");
-          const hasLoaded = e.currentTarget.dataset.loaded === 'true';
-
-          commentsWrap.classList.toggle("hidden");
-
-          // Fetch only if it's opening and hasn't been loaded before
-          if (!hasLoaded && !commentsWrap.classList.contains('hidden')) {
-              loader.classList.remove('hidden');
-              thread.innerHTML = '';
-              try {
-                  const comments = await getComments(post.id);
-                  const commentsHTML = comments.map(comment => `
-                    <div class="text-sm border-t pt-2 mt-2">
-                        <p class="text-gray-500 text-xs mb-1">Anonymous · ${timeAgo(comment.created_at)}</p>
-                        <p>${esc(comment.content)}</p>
-                    </div>`).join('');
-                  thread.innerHTML = commentsHTML || '<p class="text-sm text-gray-500">No comments yet.</p>';
-                  e.currentTarget.dataset.loaded = 'true';
-              } catch (err) {
-                  thread.innerHTML = `<p class="text-red-500 text-sm">Could not load comments.</p>`;
-              } finally {
-                  loader.classList.add('hidden');
-              }
-          }
-      });
-
-      card.querySelector(".c-submit").addEventListener("click", async (e) => {
-        const button = e.currentTarget, textEl = card.querySelector(".c-text");
-        if (!textEl.value.trim()) return;
-        button.disabled = true;
-        try {
-          const fd = new FormData();
-          fd.append("post_id", post.id);
-          fd.append("text", textEl.value);
-          await createComment(fd);
-          textEl.value = "";
-          // Mark comments as not loaded so they refetch on next open
-          card.querySelector('.toggle-comments').dataset.loaded = 'false';
-          card.querySelector('.comments').classList.add('hidden'); // Hide after posting
-        } catch (error) {
-          console.error("Comment submission failed:", error);
-        } finally {
-          button.disabled = false;
+        const shareButton = card.querySelector(".share-post");
+        if (!navigator.share) {
+            shareButton.style.display = 'none';
+        } else {
+            shareButton.addEventListener("click", async () => { /* ... share logic ... */ });
         }
-      });
+        
+        card.querySelectorAll('.poll-option').forEach(option => {
+            option.addEventListener('click', async (e) => {
+                const pollContainer = e.currentTarget.closest('.poll-container');
+                if (pollContainer.classList.contains('voted')) return;
+
+                const postId = e.currentTarget.dataset.postId;
+                const optionId = parseInt(e.currentTarget.dataset.optionId, 10);
+                addVotedPoll(postId, optionId);
+                
+                try {
+                    await sendVote(optionId);
+                    // Instead of full reload, just refresh posts to get updated vote counts
+                    loadHomepage(); 
+                } catch (error) {
+                    console.error("Vote failed:", error);
+                }
+            });
+        });
+
+        card.querySelector(".toggle-comments").addEventListener('click', async (e) => {
+            const commentsSection = card.querySelector('.comments');
+            const thread = commentsSection.querySelector('.thread');
+            const loader = commentsSection.querySelector('.loader-container');
+            const hasLoaded = e.currentTarget.dataset.loaded === 'true';
+
+            commentsSection.classList.toggle('hidden');
+
+            if (!hasLoaded && !commentsSection.classList.contains('hidden')) {
+                loader.classList.remove('hidden');
+                thread.innerHTML = '';
+                try {
+                    const comments = await getComments(post.id);
+                    const commentsHTML = comments.map(comment => `
+                        <div class="text-sm border-t pt-2 mt-2">
+                            <p class="text-gray-500 text-xs mb-1">Anonymous · ${timeAgo(comment.created_at)}</p>
+                            <p>${esc(comment.content)}</p>
+                        </div>`).join('');
+                    thread.innerHTML = commentsHTML || '<p class="text-sm text-gray-500">No comments yet.</p>';
+                    e.currentTarget.dataset.loaded = 'true';
+                } catch (err) {
+                    thread.innerHTML = `<p class="text-red-500 text-sm">Could not load comments.</p>`;
+                } finally {
+                    loader.classList.add('hidden');
+                }
+            }
+        });
+
+        card.querySelector(".c-submit").addEventListener("click", async (e) => {
+            const button = e.currentTarget;
+            const textEl = card.querySelector(".c-text");
+            if (!textEl.value.trim()) return;
+            
+            button.disabled = true;
+            button.innerHTML = `<div class="loader-small"></div>`;
+            try {
+                const fd = new FormData();
+                fd.append("post_id", post.id);
+                fd.append("text", textEl.value);
+                await createComment(fd);
+                textEl.value = "";
+                // Invalidate comment cache and reload them by simulating a click
+                card.querySelector('.toggle-comments').dataset.loaded = 'false';
+                card.querySelector('.toggle-comments').click(); // close
+                card.querySelector('.toggle-comments').click(); // and re-open to refresh
+            } catch (error) {
+                console.error("Comment submission failed:", error);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = `<span>Comment</span>`;
+            }
+        });
     }
 
     // ---------- INITIALIZATION ----------
-    document.getElementById('create-poll-btn').addEventListener('click', e => { /* ... poll UI logic ... */ });
-    document.getElementById('add-poll-option').addEventListener('click', () => { /* ... poll UI logic ... */ });
-    document.getElementById("postForm").addEventListener("submit", async e => { /* ... post submission logic ... */ });
+    document.getElementById('create-poll-btn').addEventListener('click', e => {
+        document.getElementById('poll-creator').classList.toggle('hidden');
+        document.getElementById('add-option-container').classList.toggle('hidden');
+        e.currentTarget.textContent = e.currentTarget.textContent.includes('Create') ? 'Cancel Poll' : 'Create Poll';
+    });
+
+    document.getElementById('add-poll-option').addEventListener('click', () => {
+        const pollCreator = document.getElementById('poll-creator');
+        const newOption = document.createElement('input');
+        newOption.type = 'text';
+        newOption.placeholder = `Option ${pollCreator.children.length + 1}`;
+        newOption.className = 'ios-input w-full poll-option-input';
+        pollCreator.appendChild(newOption);
+    });
+
+    document.getElementById("postForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const button = document.getElementById("postSubmitButton");
+        button.disabled = true;
+        button.innerHTML = `<div class="loader-small"></div>`;
+        try {
+            const fd = new FormData();
+            fd.append("content", document.getElementById("postText").value);
+            const imgFile = document.getElementById("postImage").files[0];
+            if (imgFile) fd.append("image", imgFile);
+
+            const pollOptions = [...document.querySelectorAll('.poll-option-input')].map(i => i.value.trim()).filter(Boolean);
+            if (pollOptions.length > 0) {
+                fd.append('pollOptions', JSON.stringify(pollOptions));
+            }
+            
+            await createPost(fd);
+            e.target.reset();
+            loadHomepage();
+        } catch (error) {
+            console.error("Post creation failed:", error);
+            alert("Could not create post. Please try again.");
+        } finally {
+            button.disabled = false;
+            button.innerHTML = `<span>Post</span>`;
+        }
+    });
 
     checkLoginStatus();
     loadHomepage();
