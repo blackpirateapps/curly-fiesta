@@ -170,7 +170,8 @@
 <body class="bg-gray-100 text-gray-900">
 
   <header class="app-header text-center p-3 flex justify-between items-center">
-    <div class="w-1/3"></div>
+    <div class="w-1/3 text-left" id="auth-links">
+        </div>
     <h1 class="text-xl font-bold w-1/3">Curly Fiesta</h1>
     <div class="w-1/3 text-right">
         <a href="/chat.html" class="ios-button text-sm">Live Chat</a>
@@ -178,7 +179,6 @@
   </header>
 
   <main class="max-w-xl mx-auto p-3">
-    <!-- Site Description -->
     <div class="text-center text-gray-600 text-sm mb-4 px-4 space-y-2">
       <div>
         <p class="font-semibold">What happens in the common room, gets posted here.</p>
@@ -187,18 +187,15 @@
       <p class="pt-2 border-t border-gray-200">Welcome to Curly Fiesta, the anonymous social hub for your campus. Share confessions, spill the latest rumors, and find out what's <em>really</em> going on. What you see here, stays here... maybe.</p>
     </div>
 
-    <!-- Notice Board -->
     <div id="notice-board" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-lg shadow-sm mb-6" role="alert">
         <p class="font-bold">Notice Board</p>
         <div id="notice-content" class="whitespace-pre-wrap">Loading...</div>
     </div>
 
-    <!-- New Post Form -->
     <div class="post-card p-4">
       <form id="postForm" enctype="multipart/form-data">
         <textarea id="postText" placeholder="What's happening? Ask a question for a poll..." class="ios-input w-full p-2 mb-3" required></textarea>
 
-        <!-- Poll Creation UI -->
         <div id="poll-creator" class="hidden space-y-2 mb-3">
             <input type="text" placeholder="Option 1" class="ios-input w-full poll-option-input">
             <input type="text" placeholder="Option 2" class="ios-input w-full poll-option-input">
@@ -219,10 +216,8 @@
       </form>
     </div>
 
-    <!-- Posts Container -->
     <div id="posts"></div>
 
-    <!-- Initial Loading Spinner -->
     <div id="main-loader" class="loader-container">
       <div class="loader"></div>
     </div>
@@ -234,13 +229,9 @@
 
     // --- Cookie Management ---
     function getCookie(name) {
-        const cookie = document.cookie.split('; ').find(row => row.startsWith(`${name}=`));
-        if (!cookie) return null;
-        try {
-            return JSON.parse(decodeURIComponent(cookie.split('=')[1]));
-        } catch (e) {
-            return null;
-        }
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
     }
     function setCookie(name, value) {
         const date = new Date();
@@ -249,9 +240,32 @@
         document.cookie = `${name}=${cookieValue};expires=${date.toUTCString()};path=/;SameSite=Lax`;
     }
 
+    // --- ADDED: Time formatting function ---
+    function timeAgo(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const seconds = Math.round((now - date) / 1000);
+        const minutes = Math.round(seconds / 60);
+        const hours = Math.round(minutes / 60);
+        const days = Math.round(hours / 24);
+
+        if (seconds < 60) return "just now";
+        if (minutes < 60) return `${minutes} minutes ago`;
+        if (hours < 24) return `${hours} hours ago`;
+        if (days < 7) return `${days} days ago`;
+
+        return `on ${date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    }
+
+
     // Likes
     const LIKED_ITEMS_KEY = 'likedItems';
-    function getLikedItems() { return getCookie(LIKED_ITEMS_KEY) || { posts: [], comments: [] }; }
+    function getLikedItems() {
+        const cookie = document.cookie.split('; ').find(row => row.startsWith(`${LIKED_ITEMS_KEY}=`));
+        if (!cookie) return { posts: [], comments: [] };
+        try { return JSON.parse(decodeURIComponent(cookie.split('=')[1])); } 
+        catch (e) { return { posts: [], comments: [] }; }
+    }
     function addLikedItem(type, id) {
         const likedItems = getLikedItems();
         const items = (type === 'post') ? likedItems.posts : likedItems.comments;
@@ -261,7 +275,12 @@
 
     // Polls
     const VOTED_POLLS_KEY = 'votedPolls';
-    function getVotedPolls() { return getCookie(VOTED_POLLS_KEY) || {}; }
+    function getVotedPolls() {
+        const cookie = document.cookie.split('; ').find(row => row.startsWith(`${VOTED_POLLS_KEY}=`));
+        if (!cookie) return {};
+        try { return JSON.parse(decodeURIComponent(cookie.split('=')[1])); }
+        catch (e) { return {}; }
+    }
     function addVotedPoll(postId, optionId) {
         const votedPolls = getVotedPolls();
         votedPolls[postId] = optionId;
@@ -280,6 +299,20 @@
     const createComment = (fd) => fetch("/api/comment", { method: "POST", body: fd });
     const sendLike = (type, id) => apiCall("/api/like", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, id }) });
     const sendVote = (optionId) => apiCall("/api/polls", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ optionId }) });
+
+    // --- ADDED: Check login status and update header ---
+    function checkLoginStatus() {
+        const authLinksContainer = document.getElementById('auth-links');
+        const token = getCookie('token');
+        if (token) {
+            authLinksContainer.innerHTML = `<a href="/profile.html" class="ios-button text-sm">My Profile</a>`;
+        } else {
+            authLinksContainer.innerHTML = `
+                <a href="/login.html" class="ios-button ios-button-secondary text-sm">Login</a>
+                <a href="/signup.html" class="ios-button text-sm ml-2">Sign Up</a>
+            `;
+        }
+    }
 
 
     // ---------- RENDER LOGIC ----------
@@ -330,20 +363,23 @@
           }
 
           card.innerHTML = `
+            <div class="flex justify-between items-center mb-2">
+                <p class="text-xs text-gray-500">${timeAgo(post.created_at)}</p>
+            </div>
             <p class="mb-3 whitespace-pre-wrap">${esc(post.content || "")}</p>
             ${post.image_url ? `<img src="${post.image_url}" class="w-full rounded-lg mb-3 border border-gray-200" crossorigin="anonymous">` : ""}
             ${pollHTML}
             <div class="flex gap-2 text-sm text-gray-600 mt-3 border-t pt-2">
               <button class="action-button like-post ${isLiked ? 'liked' : ''}" data-post-id="${post.id}">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
                 <span>${post.likes ?? 0}</span>
               </button>
               <button class="action-button toggle-comments">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 <span>Comments</span>
               </button>
               <button class="action-button share-post ml-auto">
-                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>
+                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/></svg>
                  <span>Share</span>
               </button>
             </div>
@@ -425,6 +461,8 @@
             addVotedPoll(postId, optionId);
             pollContainer.classList.add('voted');
 
+            // NOTE: Refetching data here can be slow. A better approach for production
+            // would be to update the UI optimistically and send the vote in the background.
             const { posts: allPosts } = await getHomepageData();
             const currentPost = allPosts.find(p => p.id == postId);
             
@@ -473,7 +511,7 @@
           fd.append("text", textEl.value);
           await createComment(fd);
           textEl.value = "";
-          // You might want to refresh comments here
+          // You might want to refresh comments here to see the new one
         } catch (error) {
           console.error("Comment submission failed:", error);
         } finally {
@@ -543,7 +581,9 @@
       }
     });
 
-    loadHomepage();
+    // --- MODIFIED: Initial page load ---
+    checkLoginStatus(); // Check login status first
+    loadHomepage();     // Then load the homepage content
   </script>
 </body>
 </html>
